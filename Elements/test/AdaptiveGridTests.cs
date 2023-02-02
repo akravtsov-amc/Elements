@@ -11,6 +11,38 @@ namespace Elements.Tests
 {
     public class AdaptiveGridTests : ModelTest
     {
+        [Fact]
+        public void AdaptiveGridPolygonMemoryTimeTest()
+        {
+            const int N = 1000, K = 500;
+            var rand = new Random(228);
+
+            var v1 = new Vector3(rand.NextDouble() - .5, rand.NextDouble() - .5, rand.NextDouble() - .5).Unitized();
+            var v2 = new Vector3(rand.NextDouble() - .5, rand.NextDouble() - .5, rand.NextDouble() - .5);
+            v2 = (v2 - v2.ProjectOnto(v1)).Unitized();
+            var polygonVerticesAngles = (new int[N]).Select(i => rand.NextDouble() * Math.PI * 2).ToList();
+            polygonVerticesAngles.Sort();
+            var polygonVertices = polygonVerticesAngles.Select(alpha => (v1 * Math.Cos(alpha) + v2 * Math.Sin(alpha)) * N * (rand.NextDouble() + 1)).ToArray();
+            var polygon = new Polygon(polygonVertices);
+            var keyPoints = (new int[K]).Select(i => rand.NextDouble() * Math.PI * 2).Select(alpha => (v1 * Math.Cos(alpha) + v2 * Math.Sin(alpha)) * N * rand.NextDouble());
+
+            var adaptiveGrid = new AdaptiveGrid();
+            adaptiveGrid.AddFromPolygon(polygon, keyPoints);
+        }
+
+        [Fact]
+        public void AdaptiveGridIterativeMemoryTimeTest()
+        {
+            const int N = 1000;
+            var rand = new Random(228);
+
+            var adaptiveGrid = new AdaptiveGrid();
+            for (int i = 0; i < N; ++i)
+            {
+                adaptiveGrid.AddVertex(new Vector3(rand.NextDouble() * N * 2 - N, rand.NextDouble() * N * 2 - N, rand.NextDouble() * N * 2 - N));
+            }
+        }
+
         [Fact, Trait("Category", "Examples")]
         public void AdaptiveGridPolygonKeyPointsExample()
         {
