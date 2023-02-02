@@ -1274,9 +1274,8 @@ namespace Elements.Spatial.AdaptiveGrid
 
         private void DeleteVertex(ulong id)
         {
-            var vertex = _vertices[id];
+            _verticesLookup.Remove(id, _vertices[id].Point);
             _vertices.Remove(id);
-            _verticesLookup.Remove(id, vertex.Point);
         }
 
         private Grid2d CreateGridFromPolygon(Polygon boundingPolygon)
