@@ -40,7 +40,7 @@ namespace Elements.Spatial.AdaptiveGrid
         private Dictionary<string, ulong> _edgesLookup = new Dictionary<string, ulong>();
 
         // Vertex lookup by x, y, z coordinate.
-        private Dictionary<double, Dictionary<double, Dictionary<double, ulong>>> _verticesLookup = new Dictionary<double, Dictionary<double, Dictionary<double, ulong>>>();
+        private PointOctree<ulong> _verticesLookup = new PointOctree<ulong>(float.PositiveInfinity, new Vector3(0,0,0), Vector3.EPSILON);
 
         #endregion
 
@@ -65,7 +65,7 @@ namespace Elements.Spatial.AdaptiveGrid
         /// Applies individually to X, Y, and Z coordinates, not the cumulative difference!
         /// Tolerance is twice the epsilon to make sure graph has no cracks when new sections are added.
         /// </summary>
-        public double Tolerance { get; } = Vector3.EPSILON * 2;
+        public double Tolerance { get; }  = Vector3.EPSILON * 2;
 
         /// <summary>
         /// Maximum distance for line segments of hints lines to extend to other existing edges.
@@ -357,13 +357,14 @@ namespace Elements.Spatial.AdaptiveGrid
         /// <returns></returns>
         public bool TryGetVertexIndex(Vector3 point, out ulong id, double? tolerance = null)
         {
-            var zDict = GetAddressParent(_verticesLookup, point, tolerance: tolerance);
-            if (zDict == null)
+            var closePoints = _verticesLookup.GetNearby(point, tolerance ?? double.PositiveInfinity);
+            if (closePoints.Length == 0)
             {
                 id = 0;
                 return false;
             }
-            return TryGetValue(zDict, point.Z, out id, tolerance);
+            id = closePoints[0];
+            return true;
         }
 
         /// <summary>
@@ -374,17 +375,16 @@ namespace Elements.Spatial.AdaptiveGrid
         /// <returns>New or existing Vertex.</returns>
         public Vertex AddVertex(Vector3 point)
         {
-            if (!TryGetVertexIndex(point, out var id, Tolerance))
+            ulong id;
+            if (TryGetVertexIndex(point, out id, Tolerance))
             {
-                var zDict = GetAddressParent(_verticesLookup, point, true, Tolerance);
-                id = this._vertexId;
-                var vertex = new Vertex(id, point);
-                zDict[point.Z] = id;
-                _vertices[id] = vertex;
-                this._vertexId++;
+                return GetVertex(id);
             }
-
-            return GetVertex(id);
+            id = _vertexId++;
+            _verticesLookup.Add(id, point);
+            var vertex = new Vertex(id, point);
+            _vertices[id] = vertex;
+            return vertex;
         }
 
         /// <summary>
@@ -1276,22 +1276,7 @@ namespace Elements.Spatial.AdaptiveGrid
         {
             var vertex = _vertices[id];
             _vertices.Remove(id);
-            var zDict = GetAddressParent(_verticesLookup, vertex.Point, tolerance: Tolerance);
-            if (zDict == null)
-            {
-                return;
-            }
-            zDict.Remove(vertex.Point.Z);
-
-            TryGetValue(_verticesLookup, vertex.Point.X, out var yzDict, Tolerance);
-            if (zDict.Count == 0)
-            {
-                yzDict.Remove(vertex.Point.Y);
-            }
-            if (yzDict.Count == 0)
-            {
-                _verticesLookup.Remove(vertex.Point.X);
-            }
+            _verticesLookup.Remove(id, vertex.Point);
         }
 
         private Grid2d CreateGridFromPolygon(Polygon boundingPolygon)
