@@ -357,7 +357,7 @@ namespace Elements.Spatial.AdaptiveGrid
         /// <returns></returns>
         public bool TryGetVertexIndex(Vector3 point, out ulong id, double? tolerance = null)
         {
-            var closePoints = _verticesLookup.GetNearby(point, tolerance ?? double.PositiveInfinity);
+            var closePoints = _verticesLookup.GetNearby(point, Math.Max(tolerance ?? 0, Tolerance));
             if (closePoints.Length == 0)
             {
                 id = 0;
