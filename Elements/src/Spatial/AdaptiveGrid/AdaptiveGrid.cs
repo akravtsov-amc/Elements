@@ -40,7 +40,7 @@ namespace Elements.Spatial.AdaptiveGrid
         private Dictionary<string, ulong> _edgesLookup = new Dictionary<string, ulong>();
 
         // Vertex lookup by x, y, z coordinate.
-        private PointOctree<ulong> _verticesLookup = new PointOctree<ulong>(float.PositiveInfinity, new Vector3(0,0,0), Vector3.EPSILON);
+        private PointOctree<ulong> _verticesLookup = new PointOctree<ulong>(1e30f, new Vector3(0,0,0), Vector3.EPSILON);
 
         #endregion
 
