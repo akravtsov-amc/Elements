@@ -31,13 +31,20 @@ namespace Elements.Tests
         [Fact]
         public void AdaptiveGridIterativeMemoryTimeTest()
         {
-            const int N = 300;
+            const int N = 3000;
             var rand = new Random(228);
 
             var adaptiveGrid = new AdaptiveGrid();
+            var vertices = new List<Spatial.AdaptiveGrid.Vertex>();
             for (int i = 0; i < N; ++i)
             {
-                adaptiveGrid.AddVertex(new Vector3(rand.NextDouble() * N * 2 - N, rand.NextDouble() * N * 2 - N, rand.NextDouble() * N * 2 - N));
+                var vertex = adaptiveGrid.AddVertex(new Vector3(rand.NextDouble() * N * 2 - N, rand.NextDouble() * N * 2 - N, rand.NextDouble() * N * 2 - N));
+                vertices.Add(vertex);
+            }
+
+            foreach (var vertex in vertices)
+            {
+                adaptiveGrid.RemoveVertex(vertex);
             }
         }
 
