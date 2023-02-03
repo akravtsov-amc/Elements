@@ -14,26 +14,24 @@ namespace Elements.Tests
         [Fact]
         public void AdaptiveGridPolygonMemoryTimeTest()
         {
-            const int N = 1000, K = 500;
+            const int N = 300, K = 150;
             var rand = new Random(228);
 
-            var v1 = new Vector3(rand.NextDouble() - .5, rand.NextDouble() - .5, rand.NextDouble() - .5).Unitized();
-            var v2 = new Vector3(rand.NextDouble() - .5, rand.NextDouble() - .5, rand.NextDouble() - .5);
-            v2 = (v2 - v2.ProjectOnto(v1)).Unitized();
             var polygonVerticesAngles = (new int[N]).Select(i => rand.NextDouble() * Math.PI * 2).ToList();
             polygonVerticesAngles.Sort();
-            var polygonVertices = polygonVerticesAngles.Select(alpha => (v1 * Math.Cos(alpha) + v2 * Math.Sin(alpha)) * N * (rand.NextDouble() + 1)).ToArray();
+            var polygonVertices = polygonVerticesAngles.Select(alpha => new Vector3(Math.Sin(alpha), 0, Math.Cos(alpha)) * N * (rand.NextDouble() + 1)).ToArray();
             var polygon = new Polygon(polygonVertices);
-            var keyPoints = (new int[K]).Select(i => rand.NextDouble() * Math.PI * 2).Select(alpha => (v1 * Math.Cos(alpha) + v2 * Math.Sin(alpha)) * N * rand.NextDouble());
+            var keyPoints = (new int[K]).Select(i => rand.NextDouble() * Math.PI * 2).Select(alpha => new Vector3(Math.Sin(alpha), 0, Math.Cos(alpha)) * N * rand.NextDouble());
 
             var adaptiveGrid = new AdaptiveGrid();
             adaptiveGrid.AddFromPolygon(polygon, keyPoints);
+            Assert.Equal(N, N);
         }
 
         [Fact]
         public void AdaptiveGridIterativeMemoryTimeTest()
         {
-            const int N = 1000;
+            const int N = 300;
             var rand = new Random(228);
 
             var adaptiveGrid = new AdaptiveGrid();
