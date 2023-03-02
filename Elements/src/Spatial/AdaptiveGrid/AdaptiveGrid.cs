@@ -44,6 +44,829 @@ namespace Elements.Spatial.AdaptiveGrid
 
         #endregion
 
+        #region Segment Trees
+
+        public interface GeneralSearchable<TKey, TValue>
+        {
+            void Insert(TKey x, TValue v);
+
+            void Erase(TKey x);
+
+            bool Find(TKey lx, TKey rx, out TKey x, out TValue v);
+
+            int Size { get; }
+        }
+
+        public class SingleContainer<TKey, TValue> : GeneralSearchable<TKey, TValue>
+        {
+            Dictionary<TKey, TValue> values;
+
+            public SingleContainer()
+            {
+                values = new Dictionary<TKey, TValue>();
+            }
+
+            public void Insert(TKey x, TValue v)
+            {
+                values[x] = v;
+            }
+
+            public void Erase(TKey x)
+            {
+                values.Remove(x);
+            }
+
+            public bool Find(TKey lx, TKey rx, out TKey x, out TValue v)
+            {
+                var t = values.First();
+                x = t.Key;
+                v = t.Value;
+                return true;
+            }
+
+            public int Size { get { return values.Count; } }
+        }
+        /*
+        public class GeneralRBTree<TKey1, TKey2, TTree> : GeneralSearchable<(TKey1, TKey2)>
+            where TKey1 : IComparable<TKey1>
+            where TKey2 : IComparable<TKey2>
+            where TTree : GeneralSearchable<TKey2>, new()
+        {
+            GeneralRBTreeNode root;
+            Dictionary<(TKey1, TKey2), GeneralRBTreeNode> nodes;
+
+            private enum Color { BLACK, RED };
+
+            private class GeneralRBTreeNode
+            {
+                public GeneralRBTreeNode[] child;
+                public GeneralRBTreeNode parent;
+                public Color color;
+                public TKey1 lx, rx;
+                public (TKey1 key1, TKey2 key2) key;
+                public TTree subtree;
+
+                public GeneralRBTreeNode((TKey1 key1, TKey2 key2) key)
+                {
+                    child = new GeneralRBTreeNode[2] { null, null };
+                    parent = null;
+                    lx = rx = key.key1;
+                    this.key = key;
+                    subtree = new TTree();
+                    subtree.Insert(key.key2);
+                }
+
+                public void update()
+                {
+                    lx = rx = key.key1;
+                    if (child[0] != null)
+                    {
+                        lx = child[0].lx;
+                    }
+                    if (child[1] != null)
+                    {
+                        rx = child[1].rx;
+                    }
+                }
+            }
+
+            private int childDir(GeneralRBTreeNode n)
+            {
+                return n == n.parent.child[0] ? 0 : 1;
+            }
+
+            private GeneralRBTreeNode RotateDirRoot(GeneralRBTreeNode p, int dir)
+            {
+                GeneralRBTreeNode g = p.parent;
+                GeneralRBTreeNode s = p.child[1 - dir];
+                GeneralRBTreeNode c;
+
+                if (s == null)
+                {
+                    throw new Exception("Invalid rotate request.");
+                }
+
+                c = s.child[dir];
+                p.child[1 - dir] = c;
+                if (c != null)
+                {
+                    c.parent = p;
+                }
+                s.child[dir] = p;
+                p.parent = s;
+                s.parent = g;
+
+                p.update();
+                s.update();
+
+                p.subtree.Erase(s.key.key2);
+
+                if (g == null)
+                {
+                    root = s;
+                }
+                else
+                {
+                    g.child[p == g.child[1] ? 1 : 0] = s;
+                }
+
+                return s;
+            }
+
+            private void RBInsert((TKey1 key1, TKey2 key2) key)
+            {
+                GeneralRBTreeNode n = root;
+                GeneralRBTreeNode p = null;
+                int dir = 0;
+                while (n != null)
+                {
+                    p = n;
+                    if (n.key.key1.CompareTo(key.key1) < 0)
+                    {
+                        dir = 1;
+                        n = n.child[1];
+                    }
+                    else
+                    {
+                        dir = 0;
+                        n = n.child[0];
+                    }
+                }
+                n = new GeneralRBTreeNode(key);
+                nodes[key] = n;
+
+                GeneralRBTreeNode g, u;
+
+                n.color = Color.RED;
+                n.child[0] = n.child[1] = null;
+                n.parent = p;
+                if (p == null)
+                {
+                    root = n;
+                    return;
+                }
+                p.child[dir] = n;
+
+                GeneralRBTreeNode v = n.parent;
+                while (v != null)
+                {
+                    v.subtree.Insert(key.key2);
+                    v.update();
+                    v = v.parent;
+                }
+
+                do
+                {
+                    if (p.color == Color.BLACK)
+                    {
+                        break;
+                    }
+
+                    if ((g = p.parent) == null)
+                    {
+                        p.color = Color.BLACK;
+                        break;
+                    }
+
+                    dir = childDir(p);
+                    u = g.child[1 - dir];
+                    if (u == null || u.color == Color.BLACK)
+                    {
+                        if (n == p.child[1 - dir])
+                        {
+                            RotateDirRoot(p, dir);
+                            n = p;
+                            p = g.child[dir];
+                        }
+                        RotateDirRoot(g, 1 - dir);
+                        p.color = Color.BLACK;
+                        g.color = Color.RED;
+                        break;
+                    }
+
+                    p.color = Color.BLACK;
+                    u.color = Color.BLACK;
+                    g.color = Color.RED;
+                    n = g;
+                } while ((p = n.parent) != null);
+            }
+
+            public void Insert((TKey1, TKey2) key)
+            {
+                RBInsert(key);
+            }
+
+            private void ToListAux(GeneralRBTreeNode node, List<(TKey1 key1, TKey2 key2)> list)
+            {
+                if (node == null)
+                {
+                    return;
+                }
+                ToListAux(node.child[0], list);
+                list.Add(node.key);
+                ToListAux(node.child[1], list);
+            }
+
+            public List<(TKey1 key1, TKey2 key2)> ToList()
+            {
+                var ans = new List<(TKey1 key1, TKey2 key2)>();
+                ToListAux(root, ans);
+                return ans;
+            }
+
+            private void propagateErase(GeneralRBTreeNode from, GeneralRBTreeNode to, TKey2 key2)
+            {
+                while (from != to && from != null)
+                {
+                    from.subtree.Erase(key2);
+                    from.update();
+                    from = from.parent;
+                }
+            }
+
+            private void RBDelete((TKey1 key1, TKey2 key2) key)
+            {
+                var n = nodes[key];
+                nodes.Remove(key);
+                GeneralRBTreeNode s;
+
+                if (n == null)
+                {
+                    return;
+                }
+
+                var p = n.parent;
+                int dir = p == null ? 0 : childDir(n);
+                if (n.child[0] != null && n.child[1] != null)
+                {
+                    s = n.child[1];
+                    while (s.child[0] != null)
+                    {
+                        s = s.child[0];
+                    }
+                    propagateErase(s, n, s.key.key2);
+                    (n.key, s.key) = (s.key, n.key);
+                    (n, s) = (s, n);
+                    nodes[s.key] = s;
+                    dir = childDir(n);
+                    p = n.parent;
+                }
+
+                if (n.child[0] != null || n.child[1] != null)
+                {
+                    n = n.child[n.child[0] == null ? 1 : 0];
+                    n.color = Color.BLACK;
+                    n.parent = p;
+                    if (p == null)
+                    {
+                        root = n;
+                        return;
+                    }
+                    p.child[dir] = n;
+                    propagateErase(p, null, key.key2);
+                    return;
+                }
+                if (p == null)
+                {
+                    root = null;
+                    return;
+                }
+                if (n.color == Color.RED)
+                {
+                    p.child[dir] = null;
+                    n = p;
+                    propagateErase(p, null, key.key2);
+                    return;
+                }
+
+                bool br = false;
+                p.child[dir] = n = null;
+                propagateErase(p, null, key.key2);
+                while (p != null)
+                {
+                    s = p.child[1 - dir];
+                    GeneralRBTreeNode c = s.child[dir], d = s.child[1 - dir];
+                    if (s.color == Color.RED)
+                    {
+                        RotateDirRoot(p, dir);
+                        p.color = Color.RED;
+                        s.color = Color.BLACK;
+                        s = c;
+                        d = s.child[1 - dir];
+                        c = s.child[dir];
+                        br = true;
+                    }
+                    if (c != null && c.color == Color.RED)
+                    {
+                        RotateDirRoot(s, 1 - dir);
+                        s.color = Color.RED;
+                        c.color = Color.BLACK;
+                        d = s;
+                        s = c;
+                        br = true;
+                    }
+                    if (d != null && d.color == Color.RED)
+                    {
+                        RotateDirRoot(p, dir);
+                        s.color = p.color;
+                        d.color = Color.BLACK;
+                        p.color = Color.BLACK;
+                        br = true;
+                    }
+
+                    if (br) break;
+
+                    if (p.color == Color.RED)
+                    {
+                        s.color = Color.RED;
+                        p.color = Color.BLACK;
+                        break;
+                    }
+
+                    s.color = Color.RED;
+                    n = p;
+
+                    dir = childDir(n);
+                    p = n.parent;
+                }
+            }
+
+            public void Erase((TKey1, TKey2) key)
+            {
+                RBDelete(key);
+            }
+
+            private bool RBFind(GeneralRBTreeNode n, (TKey1 key1, TKey2 key2) lft, (TKey1 key1, TKey2 key2) rgt, out (TKey1 key1, TKey2 key2) x)
+            {
+                if (lft.key1.CompareTo(n.key.key1) < 0 && rgt.key1.CompareTo(n.key.key1) > 0 &&
+                    lft.key2.CompareTo(n.key.key2) < 0 && rgt.key2.CompareTo(n.key.key2) > 0)
+                {
+                    x = n.key;
+                    return true;
+                }
+                TKey2 key2;
+                if (lft.key1.CompareTo(n.lx) < 0 && rgt.key1.CompareTo(n.rx) > 0 && n.subtree.Find(lft.key2, rgt.key2, out key2))
+                {
+                    x = (n.key.key1, key2);
+                    return true;
+                }
+                if (n.child[0] != null && lft.key1.CompareTo(n.child[0].rx) < 0 && RBFind(n.child[0], lft, rgt, out x))
+                {
+                    return true;
+                }
+                if (n.child[1] != null && rgt.key1.CompareTo(n.child[1].lx) > 0 && RBFind(n.child[1], lft, rgt, out x))
+                {
+                    return true;
+                }
+                x = n.key;
+                return false;
+            }
+
+            public bool Find((TKey1, TKey2) lft, (TKey1, TKey2) rgt, out (TKey1, TKey2) x)
+            {
+                if (root == null || lft.Item1.CompareTo(root.rx) >= 0 || rgt.Item1.CompareTo(root.lx) <= 0)
+                {
+                    x = default((TKey1, TKey2));
+                    return false;
+                }
+                return RBFind(root, lft, rgt, out x);
+            }
+
+            public GeneralRBTree()
+            {
+                root = null;
+                nodes = new Dictionary<(TKey1, TKey2), GeneralRBTreeNode>();
+            }
+        }
+
+        public class RBTree1d : GeneralRBTree<double, ulong, SingleContainer<ulong>>
+        {
+            public void Insert(double x, ulong id)
+            {
+                Insert((x, id));
+            }
+
+            public void Erase(double x, ulong id)
+            {
+                Erase((x, id));
+            }
+
+            public bool Find(double lx, double rx, out ulong id)
+            {
+                (double, ulong) key;
+                bool ans = Find((lx, ulong.MinValue), (rx, ulong.MaxValue), out key);
+                id = key.Item2;
+                return ans;
+            }
+        }
+
+        public class RBTree2d : GeneralRBTree<double, (double, ulong), RBTree1d>
+        {
+            public void Insert(double x, double y, ulong id)
+            {
+                Insert((x, (y, id)));
+            }
+
+            public void Erase(double x, double y, ulong id)
+            {
+                Erase((x, (y, id)));
+            }
+
+            public bool Find(double lx, double rx, double ly, double ry, out ulong id)
+            {
+                (double, (double, ulong)) key;
+                bool ans = Find((lx, (ly, ulong.MinValue)), (rx, (ry, ulong.MaxValue)), out key);
+                id = key.Item2.Item2;
+                return ans;
+            }
+        }
+        */
+        public class GeneralSegmentTree<TKey2, TTree, TValue> : GeneralSearchable<(double, TKey2), TValue>
+            where TKey2 : IComparable<TKey2>
+            where TTree : GeneralSearchable<TKey2, (double, TValue)>, new()
+        {
+            private GeneralSegmentTreeNode root;
+
+            private class GeneralSegmentTreeNode
+            {
+                public double l, m, r;
+                public GeneralSegmentTreeNode left, right;
+                public TTree subtree;
+                public Dictionary<(double, TKey2), TValue> items;
+                public Dictionary<double, int> xs;
+
+                public GeneralSegmentTreeNode(double l, double r, double? m = null)
+                {
+                    this.l = l;
+                    this.r = r;
+                    this.m = m.HasValue ? m.Value : (l + r) / 2;
+                    subtree = new TTree();
+                    left = right = null;
+                    items = new Dictionary<(double, TKey2), TValue>();
+                    xs = new Dictionary<double, int>();
+                }
+
+                private void InsertPush((double x, TKey2 y) key, TValue value)
+                {
+                    if (key.x < m)
+                    {
+                        if (left == null)
+                        {
+                            left = new GeneralSegmentTreeNode(l, m);
+                        }
+                        left.Insert(key, value);
+                    }
+                    else
+                    {
+                        if (right == null)
+                        {
+                            right = new GeneralSegmentTreeNode(m, r);
+                        }
+                        right.Insert(key, value);
+                    }
+                }
+
+                private bool leaf { get { return left == null && right == null; } }
+
+                public void Insert((double x, TKey2 y) key, TValue value)
+                {
+                    subtree.Insert(key.y, (key.x, value));
+                    items[key] = value;
+                    if (!xs.ContainsKey(key.x))
+                    {
+                        xs[key.x] = 1;
+                    }
+                    else
+                    {
+                        xs[key.x] += 1;
+                    }
+
+                    if (leaf)
+                    {
+                        if (xs.Count < 2)
+                        {
+                            return;
+                        }
+                        foreach (var item in items)
+                        {
+                            InsertPush(item.Key, item.Value);
+                        }
+                    }
+                    else
+                    {
+                        InsertPush(key, value);
+                    }
+                }
+
+                public GeneralSegmentTreeNode extendUp(bool left)
+                {
+                    GeneralSegmentTreeNode node = null;
+                    if (left)
+                    {
+                        node = new GeneralSegmentTreeNode(2 * l - r, r, l);
+                        node.right = this;
+
+                    }
+                    else
+                    {
+                        node = new GeneralSegmentTreeNode(l, 2 * r - l, r);
+                        node.left = this;
+                    }
+                    foreach (var x in xs)
+                    {
+                        node.xs[x.Key] = x.Value;
+                    }
+                    foreach (var item in items)
+                    {
+                        node.items[item.Key] = item.Value;
+                        node.subtree.Insert(item.Key.Item2, (item.Key.Item1, item.Value));
+                    }
+                    return node;
+                }
+
+                private void RemoveSure((double x, TKey2 y) key)
+                {
+                    items.Remove(key);
+                    if (xs[key.x] == 1)
+                    {
+                        xs.Remove(key.x);
+                    }
+                    else
+                    {
+                        xs[key.x] -= 1;
+                    }
+                    subtree.Erase(key.y);
+                }
+
+                public bool Erase((double x, TKey2 y) key)
+                {
+                    if (leaf)
+                    {
+                        if (items.ContainsKey(key))
+                        {
+                            RemoveSure(key);
+                            return true;
+                        }
+                        return false;
+                    }
+
+                    if (key.x < m)
+                    {
+                        if (left == null || !left.Erase(key))
+                        {
+                            return false;
+                        }
+                    }
+                    else
+                    {
+                        if (right == null || !right.Erase(key))
+                        {
+                            return false;
+                        }
+                    }
+
+                    RemoveSure(key);
+                    if (xs.Count < 2)
+                    {
+                        left = right = null;
+                    }
+                    else
+                    {
+                        if (left != null && left.xs.Count == 0)
+                        {
+                            left = null;
+                        }
+                        if (right != null && right.xs.Count == 0)
+                        {
+                            right = null;
+                        }
+                    }
+                    return true;
+                }
+
+                public bool Find(double lx, double rx, TKey2 ly, TKey2 ry, out (double, TKey2) key, out TValue value)
+                {
+                    key = items.Keys.First();
+                    value = items[key];
+                    TKey2 key2;
+                    (double, TValue) bigValue;
+                    if (lx < l && r <= rx)
+                    {
+                        if (!subtree.Find(ly, ry, out key2, out bigValue))
+                        {
+                            return false;
+                        }
+                        key = (bigValue.Item1, key2);
+                        value = bigValue.Item2;
+                        return true;
+                    }
+
+                    if (leaf)
+                    {
+                        double x = xs.Keys.First();
+                        if (x <= lx || rx <= x || !subtree.Find(ly, ry, out key2, out bigValue))
+                        {
+                            return false;
+                        }
+                        key = (x, key2);
+                        value = bigValue.Item2;
+                        return true;
+                    }
+
+                    if (lx < m)
+                    {
+                        if (left != null && left.Find(lx, rx, ly, ry, out key, out value))
+                        {
+                            return true;
+                        }
+                    }
+                    if (m < rx)
+                    {
+                        if (right != null && right.Find(lx, rx, ly, ry, out key, out value))
+                        {
+                            return true;
+                        }
+                    }
+
+                    return false;
+                }
+            }
+
+            private (double min, double max) heuristicRange(double x)
+            {
+                x = Math.Abs(x);
+                return x < 1e-16 ? (-1, 1) : (-2 * x, 2 * x);
+            }
+
+            public GeneralSegmentTree()
+            {
+                root = null;
+            }
+
+            public int Size { get { return root == null ? 0 : root.items.Count; } }
+
+            public void Insert((double, TKey2) key, TValue value)
+            {
+                if (root == null)
+                {
+                    var range = heuristicRange(key.Item1);
+                    root = new GeneralSegmentTreeNode(range.min, range.max);
+                }
+
+                while (key.Item1 < root.l)
+                {
+                    root = root.extendUp(true);
+                }
+                while (root.r <= key.Item1)
+                {
+                    root = root.extendUp(false);
+                }
+                root.Insert(key, value);
+            }
+
+            public void Erase((double, TKey2) key)
+            {
+                if (root == null || key.Item1 < root.l || root.r <= key.Item1)
+                {
+                    return;
+                }
+
+                root.Erase(key);
+                if (root.xs.Count == 0)
+                {
+                    root = null;
+                }
+            }
+
+            public bool Find((double, TKey2) l, (double, TKey2) r, out (double, TKey2) key, out TValue value)
+            {
+                if (root == null || root.r <= l.Item1 || r.Item1 <= root.l)
+                {
+                    key = (0, default(TKey2));
+                    value = default(TValue);
+                    return false;
+                }
+
+                return root.Find(l.Item1, r.Item1, l.Item2, r.Item2, out key, out value);
+            }
+        }
+
+        public class SegmentTree1d<T> : GeneralSegmentTree<ulong, SingleContainer<ulong, (double, T)>, T>
+        {
+            private Dictionary<double, ulong> points;
+
+            public SegmentTree1d() : base()
+            {
+                points = new Dictionary<double, ulong>();
+            }
+
+            public void Insert(double x, ulong id)
+            {
+                Insert((x, id), default(T));
+                points[x] = id;
+            }
+
+            public void Erase(double x)
+            {
+                Erase((x, points[x]));
+                points.Remove(x);
+            }
+
+            public bool Find(double lx, double rx, out ulong id)
+            {
+                T tmp;
+                (double, ulong) key;
+                bool ans = Find((lx, 0), (rx, 0), out key, out tmp);
+                id = key.Item2;
+                return ans;
+            }
+        }
+
+        public class SegmentTree1d : SegmentTree1d<object> { }
+
+        public class SegmentTree2d<T> : GeneralSegmentTree<(double, ulong), SegmentTree1d<(double, T)>, T>
+        {
+            private Dictionary<(double, double), ulong> points;
+
+            public SegmentTree2d() : base()
+            {
+                points = new Dictionary<(double, double), ulong>();
+            }
+
+            public void Insert(double x, double y, ulong id)
+            {
+                Insert((x, (y, id)), default(T));
+                points[(x, y)] = id;
+            }
+
+            public void Erase(double x, double y)
+            {
+                Erase((x, (y, points[(x, y)])));
+                points.Remove((x, y));
+            }
+
+            public bool Find(double lx, double rx, double ly, double ry, out ulong id)
+            {
+                T tmp;
+                (double, (double, ulong)) key;
+                bool ans = Find((lx, (ly, 0)), (rx, (ry, 0)), out key, out tmp);
+                id = key.Item2.Item2;
+                return ans;
+            }
+        }
+
+        public class SegmentTree2d : SegmentTree2d<object> { }
+
+        public class SegmentTree3d<T> : GeneralSegmentTree<(double, (double, ulong)), SegmentTree2d<(double, T)>, T>
+        {
+            private Dictionary<Vector3, ulong> points;
+
+            public SegmentTree3d() : base()
+            {
+                points = new Dictionary<Vector3, ulong>();
+            }
+
+            public void Insert(Vector3 p, ulong id)
+            {
+                Insert((p.X, (p.Y, (p.Z, id))), default(T));
+                points[p] = id;
+            }
+
+            public void Insert(double x, double y, double z, ulong id)
+            {
+                Insert(new Vector3(x, y, z), id);
+            }
+
+            public void Erase(Vector3 p)
+            {
+                Erase((p.X, (p.Y, (p.Z, points[p]))));
+                points.Remove(p);
+            }
+
+            public void Erase(double x, double y, double z)
+            {
+                Erase(new Vector3(x, y, z));
+            }
+
+            public bool Find(Vector3 l, Vector3 r, out ulong id)
+            {
+                T tmp;
+                (double, (double, (double, ulong))) key;
+                bool ans = Find((l.X, (l.Y, (l.Z, 0))), (r.X, (r.Y, (r.Z, 0))), out key, out tmp);
+                id = key.Item2.Item2.Item2;
+                return ans;
+            }
+
+            public bool Find(double lx, double rx, double ly, double ry, double lz, double rz, out ulong id)
+            {
+                return Find(new Vector3(lx, ly, lz), new Vector3(rx, ry, rz), out id);
+            }
+        }
+
+        public class SegmentTree3d : SegmentTree3d<object> { }
+
+        #endregion
+
         #region Private enums
 
         /// <summary>
@@ -754,7 +1577,7 @@ namespace Elements.Spatial.AdaptiveGrid
                 {
                     // The same vertex can be part of multiple edges.
                     // Cache to avoid expensive cut operations.
-                    if (!alreadyConnected.Contains(newSV.Id) && 
+                    if (!alreadyConnected.Contains(newSV.Id) &&
                         TryGetVertexIndex(Start, out var id, Tolerance))
                     {
                         AddEdge(newSV.Id, id);
@@ -1365,16 +2188,16 @@ namespace Elements.Spatial.AdaptiveGrid
             points.Sort((p, q) => Math.Sign(lineVector.Dot(p.Point - q.Point)));
             for (int i = 1; i < points.Count; ++i)
             {
-                resultingSegments.Add((points[i-1], points[i]));
+                resultingSegments.Add((points[i - 1], points[i]));
             }
             return resultingSegments;
         }
 
         private List<(Vertex from, Vertex to)> SplitSegmentsWithPoints(
-            IEnumerable<Line> segmentsToSplit, 
-            double u, 
-            List<double> coords, 
-            bool linesU, 
+            IEnumerable<Line> segmentsToSplit,
+            double u,
+            List<double> coords,
+            bool linesU,
             List<Vertex> intersectionPoints,
             Transform fromGrid)
         {
@@ -1515,7 +2338,7 @@ namespace Elements.Spatial.AdaptiveGrid
         private bool IsLineInDomain(
             (Vector3 Start, Vector3 End) line,
             (Vector3 Min, Vector3 Max) domain,
-            double xyTolerance, double zTolerance, 
+            double xyTolerance, double zTolerance,
             out bool startInside, out bool endInside)
         {
             startInside = false;
