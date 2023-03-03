@@ -391,97 +391,6 @@ namespace Elements.Spatial.AdaptiveGrid
             }
         }
 
-        public class SegmentTree1d : SegmentTree1d<object> { }
-
-        public class SegmentTree2d<T> : GeneralSegmentTree<(double, ulong), SegmentTree1d<(double, T)>, T>
-        {
-            private Dictionary<(double, double), ulong> points;
-
-            public SegmentTree2d() : base()
-            {
-                points = new Dictionary<(double, double), ulong>();
-            }
-
-            public void Insert(double x, double y, ulong id)
-            {
-                Insert((x, (y, id)), default(T));
-                points[(x, y)] = id;
-            }
-
-            public void Erase(double x, double y)
-            {
-                if (!points.ContainsKey((x, y)))
-                {
-                    return;
-                }
-                Erase((x, (y, points[(x, y)])));
-                points.Remove((x, y));
-            }
-
-            public bool Find(double lx, double rx, double ly, double ry, out ulong id)
-            {
-                T tmp;
-                (double, (double, ulong)) key;
-                bool ans = Find((lx, (ly, 0)), (rx, (ry, 0)), out key, out tmp);
-                id = key.Item2.Item2;
-                return ans;
-            }
-        }
-
-        public class SegmentTree2d : SegmentTree2d<object> { }
-
-        public class SegmentTree3d<T> : GeneralSegmentTree<(double, (double, ulong)), SegmentTree2d<(double, T)>, T>
-        {
-            private Dictionary<Vector3, ulong> points;
-
-            public SegmentTree3d() : base()
-            {
-                points = new Dictionary<Vector3, ulong>();
-            }
-
-            public void Insert(Vector3 p, ulong id)
-            {
-                Insert((p.X, (p.Y, (p.Z, id))), default(T));
-                points[p] = id;
-            }
-
-            public void Insert(double x, double y, double z, ulong id)
-            {
-                Insert(new Vector3(x, y, z), id);
-            }
-
-            public void Erase(Vector3 p)
-            {
-                if (!points.ContainsKey(p))
-                {
-                    return;
-                }
-                Erase((p.X, (p.Y, (p.Z, points[p]))));
-                points.Remove(p);
-            }
-
-            public void Erase(double x, double y, double z)
-            {
-                Erase(new Vector3(x, y, z));
-            }
-
-            public bool Find(Vector3 l, Vector3 r, out ulong id)
-            {
-                T tmp;
-                (double, (double, (double, ulong))) key;
-                bool ans = Find((l.X, (l.Y, (l.Z, 0))), (r.X, (r.Y, (r.Z, 0))), out key, out tmp);
-                id = key.Item2.Item2.Item2;
-                return ans;
-            }
-
-            public bool Find(double lx, double rx, double ly, double ry, double lz, double rz, out ulong id)
-            {
-                return Find(new Vector3(lx, ly, lz), new Vector3(rx, ry, rz), out id);
-            }
-        }
-
-        public class SegmentTree3d : SegmentTree3d<object> { }
-
         public class GeneralDictionary<TKey1, TKey2, TTree, TValue>: GeneralSearchable<(TKey1, TKey2), TValue>
             where TKey1: IComparable<TKey1>
             where TTree: GeneralSearchable<TKey2, (TKey1, TValue)>, new()
@@ -579,96 +488,301 @@ namespace Elements.Spatial.AdaptiveGrid
             }
         }
 
-        public class Dictionary1d : Dictionary1d<object> { }
+        public class DicTree<T> : GeneralDictionary<double, (double, ulong), SegmentTree1d<(double, T)>, T> { }
+        public class TreeDic<T> : GeneralSegmentTree<(double, ulong), Dictionary1d<(double, T)>, T> { }
+        public class DicDic<T> : GeneralDictionary<double, (double, ulong), Dictionary1d<(double, T)>, T> { }
+        public class TreeTree<T> : GeneralSegmentTree<(double, ulong), SegmentTree1d<(double, T)>, T> { }
 
-        public class Dictionary2d<T> : GeneralDictionary<double, (double, ulong), Dictionary1d<(double, T)>, T>
+        public interface Searchable3d
         {
-            Dictionary<(double, double), ulong> points_map;
+            void Insert(double x, double y, double z, ulong id);
 
-            public Dictionary2d() : base()
-            {
-                points_map = new Dictionary<(double, double), ulong>();
-            }
+            void Erase(double x, double y, double z);
 
-            public void Insert(double x, double y, ulong id)
-            {
-                Insert((x, (y, id)), default(T));
-                points_map[(x, y)] = id;
-            }
-
-            public void Erase(double x, double y)
-            {
-                if (!points_map.ContainsKey((x, y)))
-                {
-                    return;
-                }
-                Erase((x, (y, points_map[(x, y)])));
-                points_map.Remove((x, y));
-            }
-
-            public bool Find(double lx, double rx, double ly, double ry, out ulong id)
-            {
-                T value;
-                (double, (double, ulong)) key;
-                bool ans = Find((lx, (ly, 0)), (rx, (ry, 0)), out key, out value);
-                id = key.Item2.Item2;
-                return ans;
-            }
+            bool Find(double lx, double rx, double ly, double ry, double lz, double rz, out ulong id);
         }
 
-        public class Dictionary2d : Dictionary2d<object> { }
-
-        public class Dictionary3d<T> : GeneralDictionary<double, (double, (double, ulong)), Dictionary2d<(double, T)>, T>
+        public class DicDicDic<T> : GeneralDictionary<double, (double, (double, ulong)), DicDic<(double, T)>, T>, Searchable3d
         {
-            Dictionary<Vector3, ulong> points_map;
+            private Dictionary<(double, double, double), ulong> values;
 
-            public Dictionary3d() : base()
+            public DicDicDic(): base()
             {
-                points_map = new Dictionary<Vector3, ulong>();
-            }
-
-            public void Insert(Vector3 p, ulong id)
-            {
-                Insert((p.X, (p.Y, (p.Z, id))), default(T));
-                points_map[p] = id;
+                values = new Dictionary<(double, double, double), ulong>();
             }
 
             public void Insert(double x, double y, double z, ulong id)
             {
-                Insert(new Vector3(x, y, z), id);
-            }
-
-            public void Erase(Vector3 p)
-            {
-                if (!points_map.ContainsKey(p))
-                {
-                    return;
-                }
-                Erase((p.X, (p.Y, (p.Z, points_map[p]))));
-                points_map.Remove(p);
+                Insert((x, (y, (z, id))), default(T));
+                values[(x, y, z)] = id;
             }
 
             public void Erase(double x, double y, double z)
             {
-                Erase(new Vector3(x, y, z));
-            }
-
-            public bool Find(Vector3 l, Vector3 r, out ulong id)
-            {
-                T value;
-                (double, (double, (double, ulong))) key;
-                bool ans = Find((l.X, (l.Y, (l.Z, 0))), (r.X, (r.Y, (r.Z, 0))), out key, out value);
-                id = key.Item2.Item2.Item2;
-                return ans;
+                if (!values.ContainsKey((x, y, z)))
+                {
+                    return;
+                }
+                Erase((x, (y, (z, values[(x, y, z)]))));
+                values.Remove((x, y, z));
             }
 
             public bool Find(double lx, double rx, double ly, double ry, double lz, double rz, out ulong id)
             {
-                return Find(new Vector3(lx, ly, lz), new Vector3(rx, ry, rz), out id);
+                T tmp;
+                (double, (double, (double, ulong))) key;
+                bool ans = Find((lx, (ly, (lz, 0))), (rx, (ry, (rz, 0))), out key, out tmp);
+                id = key.Item2.Item2.Item2;
+                return ans;
+            }
+        }
+        public class DicDicTree<T> : GeneralDictionary<double, (double, (double, ulong)), DicTree<(double, T)>, T>, Searchable3d
+        {
+            private Dictionary<(double, double, double), ulong> values;
+
+            public DicDicTree() : base()
+            {
+                values = new Dictionary<(double, double, double), ulong>();
+            }
+
+            public void Insert(double x, double y, double z, ulong id)
+            {
+                Insert((x, (y, (z, id))), default(T));
+                values[(x, y, z)] = id;
+            }
+
+            public void Erase(double x, double y, double z)
+            {
+                if (!values.ContainsKey((x, y, z)))
+                {
+                    return;
+                }
+                Erase((x, (y, (z, values[(x, y, z)]))));
+                values.Remove((x, y, z));
+            }
+
+            public bool Find(double lx, double rx, double ly, double ry, double lz, double rz, out ulong id)
+            {
+                T tmp;
+                (double, (double, (double, ulong))) key;
+                bool ans = Find((lx, (ly, (lz, 0))), (rx, (ry, (rz, 0))), out key, out tmp);
+                id = key.Item2.Item2.Item2;
+                return ans;
+            }
+        }
+        public class DicTreeDic<T> : GeneralDictionary<double, (double, (double, ulong)), TreeDic<(double, T)>, T>, Searchable3d
+        {
+            private Dictionary<(double, double, double), ulong> values;
+
+            public DicTreeDic() : base()
+            {
+                values = new Dictionary<(double, double, double), ulong>();
+            }
+
+            public void Insert(double x, double y, double z, ulong id)
+            {
+                Insert((x, (y, (z, id))), default(T));
+                values[(x, y, z)] = id;
+            }
+
+            public void Erase(double x, double y, double z)
+            {
+                if (!values.ContainsKey((x, y, z)))
+                {
+                    return;
+                }
+                Erase((x, (y, (z, values[(x, y, z)]))));
+                values.Remove((x, y, z));
+            }
+
+            public bool Find(double lx, double rx, double ly, double ry, double lz, double rz, out ulong id)
+            {
+                T tmp;
+                (double, (double, (double, ulong))) key;
+                bool ans = Find((lx, (ly, (lz, 0))), (rx, (ry, (rz, 0))), out key, out tmp);
+                id = key.Item2.Item2.Item2;
+                return ans;
+            }
+        }
+        public class DicTreeTree<T> : GeneralDictionary<double, (double, (double, ulong)), TreeTree<(double, T)>, T>, Searchable3d
+        {
+            private Dictionary<(double, double, double), ulong> values;
+
+            public DicTreeTree() : base()
+            {
+                values = new Dictionary<(double, double, double), ulong>();
+            }
+
+            public void Insert(double x, double y, double z, ulong id)
+            {
+                Insert((x, (y, (z, id))), default(T));
+                values[(x, y, z)] = id;
+            }
+
+            public void Erase(double x, double y, double z)
+            {
+                if (!values.ContainsKey((x, y, z)))
+                {
+                    return;
+                }
+                Erase((x, (y, (z, values[(x, y, z)]))));
+                values.Remove((x, y, z));
+            }
+
+            public bool Find(double lx, double rx, double ly, double ry, double lz, double rz, out ulong id)
+            {
+                T tmp;
+                (double, (double, (double, ulong))) key;
+                bool ans = Find((lx, (ly, (lz, 0))), (rx, (ry, (rz, 0))), out key, out tmp);
+                id = key.Item2.Item2.Item2;
+                return ans;
+            }
+        }
+        public class TreeDicDic<T> : GeneralSegmentTree<(double, (double, ulong)), DicDic<(double, T)>, T>, Searchable3d
+        {
+            private Dictionary<(double, double, double), ulong> values;
+
+            public TreeDicDic() : base()
+            {
+                values = new Dictionary<(double, double, double), ulong>();
+            }
+
+            public void Insert(double x, double y, double z, ulong id)
+            {
+                Insert((x, (y, (z, id))), default(T));
+                values[(x, y, z)] = id;
+            }
+
+            public void Erase(double x, double y, double z)
+            {
+                if (!values.ContainsKey((x, y, z)))
+                {
+                    return;
+                }
+                Erase((x, (y, (z, values[(x, y, z)]))));
+                values.Remove((x, y, z));
+            }
+
+            public bool Find(double lx, double rx, double ly, double ry, double lz, double rz, out ulong id)
+            {
+                T tmp;
+                (double, (double, (double, ulong))) key;
+                bool ans = Find((lx, (ly, (lz, 0))), (rx, (ry, (rz, 0))), out key, out tmp);
+                id = key.Item2.Item2.Item2;
+                return ans;
+            }
+        }
+        public class TreeDicTree<T> : GeneralSegmentTree<(double, (double, ulong)), DicTree<(double, T)>, T>, Searchable3d
+        {
+            private Dictionary<(double, double, double), ulong> values;
+
+            public TreeDicTree() : base()
+            {
+                values = new Dictionary<(double, double, double), ulong>();
+            }
+
+            public void Insert(double x, double y, double z, ulong id)
+            {
+                Insert((x, (y, (z, id))), default(T));
+                values[(x, y, z)] = id;
+            }
+
+            public void Erase(double x, double y, double z)
+            {
+                if (!values.ContainsKey((x, y, z)))
+                {
+                    return;
+                }
+                Erase((x, (y, (z, values[(x, y, z)]))));
+                values.Remove((x, y, z));
+            }
+
+            public bool Find(double lx, double rx, double ly, double ry, double lz, double rz, out ulong id)
+            {
+                T tmp;
+                (double, (double, (double, ulong))) key;
+                bool ans = Find((lx, (ly, (lz, 0))), (rx, (ry, (rz, 0))), out key, out tmp);
+                id = key.Item2.Item2.Item2;
+                return ans;
+            }
+        }
+        public class TreeTreeDic<T> : GeneralSegmentTree<(double, (double, ulong)), TreeDic<(double, T)>, T>, Searchable3d
+        {
+            private Dictionary<(double, double, double), ulong> values;
+
+            public TreeTreeDic() : base()
+            {
+                values = new Dictionary<(double, double, double), ulong>();
+            }
+
+            public void Insert(double x, double y, double z, ulong id)
+            {
+                Insert((x, (y, (z, id))), default(T));
+                values[(x, y, z)] = id;
+            }
+
+            public void Erase(double x, double y, double z)
+            {
+                if (!values.ContainsKey((x, y, z)))
+                {
+                    return;
+                }
+                Erase((x, (y, (z, values[(x, y, z)]))));
+                values.Remove((x, y, z));
+            }
+
+            public bool Find(double lx, double rx, double ly, double ry, double lz, double rz, out ulong id)
+            {
+                T tmp;
+                (double, (double, (double, ulong))) key;
+                bool ans = Find((lx, (ly, (lz, 0))), (rx, (ry, (rz, 0))), out key, out tmp);
+                id = key.Item2.Item2.Item2;
+                return ans;
+            }
+        }
+        public class TreeTreeTree<T> : GeneralSegmentTree<(double, (double, ulong)), TreeTree<(double, T)>, T>, Searchable3d
+        {
+            private Dictionary<(double, double, double), ulong> values;
+
+            public TreeTreeTree() : base()
+            {
+                values = new Dictionary<(double, double, double), ulong>();
+            }
+
+            public void Insert(double x, double y, double z, ulong id)
+            {
+                Insert((x, (y, (z, id))), default(T));
+                values[(x, y, z)] = id;
+            }
+
+            public void Erase(double x, double y, double z)
+            {
+                if (!values.ContainsKey((x, y, z)))
+                {
+                    return;
+                }
+                Erase((x, (y, (z, values[(x, y, z)]))));
+                values.Remove((x, y, z));
+            }
+
+            public bool Find(double lx, double rx, double ly, double ry, double lz, double rz, out ulong id)
+            {
+                T tmp;
+                (double, (double, (double, ulong))) key;
+                bool ans = Find((lx, (ly, (lz, 0))), (rx, (ry, (rz, 0))), out key, out tmp);
+                id = key.Item2.Item2.Item2;
+                return ans;
             }
         }
 
-        public class Dictionary3d : Dictionary3d<object> { }
+        public class DicDicDic : DicDicDic<object> { }
+        public class DicDicTree : DicDicTree<object> { }
+        public class DicTreeDic : DicTreeDic<object> { }
+        public class DicTreeTree : DicTreeTree<object> { }
+        public class TreeDicDic : TreeDicDic<object> { }
+        public class TreeDicTree : TreeDicTree<object> { }
+        public class TreeTreeDic : TreeTreeDic<object> { }
+        public class TreeTreeTree : TreeTreeTree<object> { }
 
         #endregion
 
