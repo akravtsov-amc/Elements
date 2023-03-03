@@ -86,403 +86,8 @@ namespace Elements.Spatial.AdaptiveGrid
 
             public int Size { get { return values.Count; } }
         }
-        /*
-        public class GeneralRBTree<TKey1, TKey2, TTree> : GeneralSearchable<(TKey1, TKey2)>
-            where TKey1 : IComparable<TKey1>
-            where TKey2 : IComparable<TKey2>
-            where TTree : GeneralSearchable<TKey2>, new()
-        {
-            GeneralRBTreeNode root;
-            Dictionary<(TKey1, TKey2), GeneralRBTreeNode> nodes;
 
-            private enum Color { BLACK, RED };
-
-            private class GeneralRBTreeNode
-            {
-                public GeneralRBTreeNode[] child;
-                public GeneralRBTreeNode parent;
-                public Color color;
-                public TKey1 lx, rx;
-                public (TKey1 key1, TKey2 key2) key;
-                public TTree subtree;
-
-                public GeneralRBTreeNode((TKey1 key1, TKey2 key2) key)
-                {
-                    child = new GeneralRBTreeNode[2] { null, null };
-                    parent = null;
-                    lx = rx = key.key1;
-                    this.key = key;
-                    subtree = new TTree();
-                    subtree.Insert(key.key2);
-                }
-
-                public void update()
-                {
-                    lx = rx = key.key1;
-                    if (child[0] != null)
-                    {
-                        lx = child[0].lx;
-                    }
-                    if (child[1] != null)
-                    {
-                        rx = child[1].rx;
-                    }
-                }
-            }
-
-            private int childDir(GeneralRBTreeNode n)
-            {
-                return n == n.parent.child[0] ? 0 : 1;
-            }
-
-            private GeneralRBTreeNode RotateDirRoot(GeneralRBTreeNode p, int dir)
-            {
-                GeneralRBTreeNode g = p.parent;
-                GeneralRBTreeNode s = p.child[1 - dir];
-                GeneralRBTreeNode c;
-
-                if (s == null)
-                {
-                    throw new Exception("Invalid rotate request.");
-                }
-
-                c = s.child[dir];
-                p.child[1 - dir] = c;
-                if (c != null)
-                {
-                    c.parent = p;
-                }
-                s.child[dir] = p;
-                p.parent = s;
-                s.parent = g;
-
-                p.update();
-                s.update();
-
-                p.subtree.Erase(s.key.key2);
-
-                if (g == null)
-                {
-                    root = s;
-                }
-                else
-                {
-                    g.child[p == g.child[1] ? 1 : 0] = s;
-                }
-
-                return s;
-            }
-
-            private void RBInsert((TKey1 key1, TKey2 key2) key)
-            {
-                GeneralRBTreeNode n = root;
-                GeneralRBTreeNode p = null;
-                int dir = 0;
-                while (n != null)
-                {
-                    p = n;
-                    if (n.key.key1.CompareTo(key.key1) < 0)
-                    {
-                        dir = 1;
-                        n = n.child[1];
-                    }
-                    else
-                    {
-                        dir = 0;
-                        n = n.child[0];
-                    }
-                }
-                n = new GeneralRBTreeNode(key);
-                nodes[key] = n;
-
-                GeneralRBTreeNode g, u;
-
-                n.color = Color.RED;
-                n.child[0] = n.child[1] = null;
-                n.parent = p;
-                if (p == null)
-                {
-                    root = n;
-                    return;
-                }
-                p.child[dir] = n;
-
-                GeneralRBTreeNode v = n.parent;
-                while (v != null)
-                {
-                    v.subtree.Insert(key.key2);
-                    v.update();
-                    v = v.parent;
-                }
-
-                do
-                {
-                    if (p.color == Color.BLACK)
-                    {
-                        break;
-                    }
-
-                    if ((g = p.parent) == null)
-                    {
-                        p.color = Color.BLACK;
-                        break;
-                    }
-
-                    dir = childDir(p);
-                    u = g.child[1 - dir];
-                    if (u == null || u.color == Color.BLACK)
-                    {
-                        if (n == p.child[1 - dir])
-                        {
-                            RotateDirRoot(p, dir);
-                            n = p;
-                            p = g.child[dir];
-                        }
-                        RotateDirRoot(g, 1 - dir);
-                        p.color = Color.BLACK;
-                        g.color = Color.RED;
-                        break;
-                    }
-
-                    p.color = Color.BLACK;
-                    u.color = Color.BLACK;
-                    g.color = Color.RED;
-                    n = g;
-                } while ((p = n.parent) != null);
-            }
-
-            public void Insert((TKey1, TKey2) key)
-            {
-                RBInsert(key);
-            }
-
-            private void ToListAux(GeneralRBTreeNode node, List<(TKey1 key1, TKey2 key2)> list)
-            {
-                if (node == null)
-                {
-                    return;
-                }
-                ToListAux(node.child[0], list);
-                list.Add(node.key);
-                ToListAux(node.child[1], list);
-            }
-
-            public List<(TKey1 key1, TKey2 key2)> ToList()
-            {
-                var ans = new List<(TKey1 key1, TKey2 key2)>();
-                ToListAux(root, ans);
-                return ans;
-            }
-
-            private void propagateErase(GeneralRBTreeNode from, GeneralRBTreeNode to, TKey2 key2)
-            {
-                while (from != to && from != null)
-                {
-                    from.subtree.Erase(key2);
-                    from.update();
-                    from = from.parent;
-                }
-            }
-
-            private void RBDelete((TKey1 key1, TKey2 key2) key)
-            {
-                var n = nodes[key];
-                nodes.Remove(key);
-                GeneralRBTreeNode s;
-
-                if (n == null)
-                {
-                    return;
-                }
-
-                var p = n.parent;
-                int dir = p == null ? 0 : childDir(n);
-                if (n.child[0] != null && n.child[1] != null)
-                {
-                    s = n.child[1];
-                    while (s.child[0] != null)
-                    {
-                        s = s.child[0];
-                    }
-                    propagateErase(s, n, s.key.key2);
-                    (n.key, s.key) = (s.key, n.key);
-                    (n, s) = (s, n);
-                    nodes[s.key] = s;
-                    dir = childDir(n);
-                    p = n.parent;
-                }
-
-                if (n.child[0] != null || n.child[1] != null)
-                {
-                    n = n.child[n.child[0] == null ? 1 : 0];
-                    n.color = Color.BLACK;
-                    n.parent = p;
-                    if (p == null)
-                    {
-                        root = n;
-                        return;
-                    }
-                    p.child[dir] = n;
-                    propagateErase(p, null, key.key2);
-                    return;
-                }
-                if (p == null)
-                {
-                    root = null;
-                    return;
-                }
-                if (n.color == Color.RED)
-                {
-                    p.child[dir] = null;
-                    n = p;
-                    propagateErase(p, null, key.key2);
-                    return;
-                }
-
-                bool br = false;
-                p.child[dir] = n = null;
-                propagateErase(p, null, key.key2);
-                while (p != null)
-                {
-                    s = p.child[1 - dir];
-                    GeneralRBTreeNode c = s.child[dir], d = s.child[1 - dir];
-                    if (s.color == Color.RED)
-                    {
-                        RotateDirRoot(p, dir);
-                        p.color = Color.RED;
-                        s.color = Color.BLACK;
-                        s = c;
-                        d = s.child[1 - dir];
-                        c = s.child[dir];
-                        br = true;
-                    }
-                    if (c != null && c.color == Color.RED)
-                    {
-                        RotateDirRoot(s, 1 - dir);
-                        s.color = Color.RED;
-                        c.color = Color.BLACK;
-                        d = s;
-                        s = c;
-                        br = true;
-                    }
-                    if (d != null && d.color == Color.RED)
-                    {
-                        RotateDirRoot(p, dir);
-                        s.color = p.color;
-                        d.color = Color.BLACK;
-                        p.color = Color.BLACK;
-                        br = true;
-                    }
-
-                    if (br) break;
-
-                    if (p.color == Color.RED)
-                    {
-                        s.color = Color.RED;
-                        p.color = Color.BLACK;
-                        break;
-                    }
-
-                    s.color = Color.RED;
-                    n = p;
-
-                    dir = childDir(n);
-                    p = n.parent;
-                }
-            }
-
-            public void Erase((TKey1, TKey2) key)
-            {
-                RBDelete(key);
-            }
-
-            private bool RBFind(GeneralRBTreeNode n, (TKey1 key1, TKey2 key2) lft, (TKey1 key1, TKey2 key2) rgt, out (TKey1 key1, TKey2 key2) x)
-            {
-                if (lft.key1.CompareTo(n.key.key1) < 0 && rgt.key1.CompareTo(n.key.key1) > 0 &&
-                    lft.key2.CompareTo(n.key.key2) < 0 && rgt.key2.CompareTo(n.key.key2) > 0)
-                {
-                    x = n.key;
-                    return true;
-                }
-                TKey2 key2;
-                if (lft.key1.CompareTo(n.lx) < 0 && rgt.key1.CompareTo(n.rx) > 0 && n.subtree.Find(lft.key2, rgt.key2, out key2))
-                {
-                    x = (n.key.key1, key2);
-                    return true;
-                }
-                if (n.child[0] != null && lft.key1.CompareTo(n.child[0].rx) < 0 && RBFind(n.child[0], lft, rgt, out x))
-                {
-                    return true;
-                }
-                if (n.child[1] != null && rgt.key1.CompareTo(n.child[1].lx) > 0 && RBFind(n.child[1], lft, rgt, out x))
-                {
-                    return true;
-                }
-                x = n.key;
-                return false;
-            }
-
-            public bool Find((TKey1, TKey2) lft, (TKey1, TKey2) rgt, out (TKey1, TKey2) x)
-            {
-                if (root == null || lft.Item1.CompareTo(root.rx) >= 0 || rgt.Item1.CompareTo(root.lx) <= 0)
-                {
-                    x = default((TKey1, TKey2));
-                    return false;
-                }
-                return RBFind(root, lft, rgt, out x);
-            }
-
-            public GeneralRBTree()
-            {
-                root = null;
-                nodes = new Dictionary<(TKey1, TKey2), GeneralRBTreeNode>();
-            }
-        }
-
-        public class RBTree1d : GeneralRBTree<double, ulong, SingleContainer<ulong>>
-        {
-            public void Insert(double x, ulong id)
-            {
-                Insert((x, id));
-            }
-
-            public void Erase(double x, ulong id)
-            {
-                Erase((x, id));
-            }
-
-            public bool Find(double lx, double rx, out ulong id)
-            {
-                (double, ulong) key;
-                bool ans = Find((lx, ulong.MinValue), (rx, ulong.MaxValue), out key);
-                id = key.Item2;
-                return ans;
-            }
-        }
-
-        public class RBTree2d : GeneralRBTree<double, (double, ulong), RBTree1d>
-        {
-            public void Insert(double x, double y, ulong id)
-            {
-                Insert((x, (y, id)));
-            }
-
-            public void Erase(double x, double y, ulong id)
-            {
-                Erase((x, (y, id)));
-            }
-
-            public bool Find(double lx, double rx, double ly, double ry, out ulong id)
-            {
-                (double, (double, ulong)) key;
-                bool ans = Find((lx, (ly, ulong.MinValue)), (rx, (ry, ulong.MaxValue)), out key);
-                id = key.Item2.Item2;
-                return ans;
-            }
-        }
-        */
         public class GeneralSegmentTree<TKey2, TTree, TValue> : GeneralSearchable<(double, TKey2), TValue>
-            where TKey2 : IComparable<TKey2>
             where TTree : GeneralSearchable<TKey2, (double, TValue)>, new()
         {
             private GeneralSegmentTreeNode root;
@@ -768,6 +373,10 @@ namespace Elements.Spatial.AdaptiveGrid
 
             public void Erase(double x)
             {
+                if (!points.ContainsKey(x))
+                {
+                    return;
+                }
                 Erase((x, points[x]));
                 points.Remove(x);
             }
@@ -801,6 +410,10 @@ namespace Elements.Spatial.AdaptiveGrid
 
             public void Erase(double x, double y)
             {
+                if (!points.ContainsKey((x, y)))
+                {
+                    return;
+                }
                 Erase((x, (y, points[(x, y)])));
                 points.Remove((x, y));
             }
@@ -839,6 +452,10 @@ namespace Elements.Spatial.AdaptiveGrid
 
             public void Erase(Vector3 p)
             {
+                if (!points.ContainsKey(p))
+                {
+                    return;
+                }
                 Erase((p.X, (p.Y, (p.Z, points[p]))));
                 points.Remove(p);
             }
@@ -864,6 +481,194 @@ namespace Elements.Spatial.AdaptiveGrid
         }
 
         public class SegmentTree3d : SegmentTree3d<object> { }
+
+        public class GeneralDictionary<TKey1, TKey2, TTree, TValue>: GeneralSearchable<(TKey1, TKey2), TValue>
+            where TKey1: IComparable<TKey1>
+            where TTree: GeneralSearchable<TKey2, (TKey1, TValue)>, new()
+        {
+            Dictionary<TKey1, TTree> values;
+            int sz;
+
+            public GeneralDictionary()
+            {
+                values = new Dictionary<TKey1, TTree>();
+                sz = 0;
+            }
+
+            public int Size { get { return sz; } }
+
+            public void Insert((TKey1, TKey2) key, TValue value)
+            {
+                if (!values.ContainsKey(key.Item1))
+                {
+                    values[key.Item1] = new TTree();
+                }
+                values[key.Item1].Insert(key.Item2, (key.Item1, value));
+                sz += 1;
+            }
+
+            public void Erase((TKey1, TKey2) key)
+            {
+                if (!values.ContainsKey(key.Item1))
+                {
+                    return;
+                }
+                sz -= 1;
+                if (values[key.Item1].Size == 1)
+                {
+                    values.Remove(key.Item1);
+                }
+                else
+                {
+                    values[key.Item1].Erase(key.Item2);
+                }
+            }
+
+            public bool Find((TKey1, TKey2) l, (TKey1, TKey2) r, out (TKey1, TKey2) key, out TValue value)
+            {
+                TKey2 key2;
+                (TKey1, TValue) bigValue;
+                foreach (var item in values)
+                {
+                    if (l.Item1.CompareTo(item.Key) < 0 && r.Item1.CompareTo(item.Key) > 0 && item.Value.Find(l.Item2, r.Item2, out key2, out bigValue))
+                    {
+                        key = (bigValue.Item1, key2);
+                        value = bigValue.Item2;
+                        return true;
+                    }
+                }
+
+                key = l;
+                value = default(TValue);
+                return false;
+            }
+        }
+
+        public class Dictionary1d<T> : GeneralDictionary<double, ulong, SingleContainer<ulong, (double, T)>, T>
+        {
+            Dictionary<double, ulong> points_map;
+
+            public Dictionary1d() : base()
+            {
+                points_map = new Dictionary<double, ulong>();
+            }
+
+            public void Insert(double x, ulong id)
+            {
+                Insert((x, id), default(T));
+                points_map[x] = id;
+            }
+
+            public void Erase(double x)
+            {
+                if (!points_map.ContainsKey(x))
+                {
+                    return;
+                }
+                Erase((x, points_map[x]));
+                points_map.Remove(x);
+            }
+
+            public bool Find(double lx, double rx, out ulong id)
+            {
+                T value;
+                (double, ulong) key;
+                bool ans = Find((lx, 0), (rx, 0), out key, out value);
+                id = key.Item2;
+                return ans;
+            }
+        }
+
+        public class Dictionary1d : Dictionary1d<object> { }
+
+        public class Dictionary2d<T> : GeneralDictionary<double, (double, ulong), Dictionary1d<(double, T)>, T>
+        {
+            Dictionary<(double, double), ulong> points_map;
+
+            public Dictionary2d() : base()
+            {
+                points_map = new Dictionary<(double, double), ulong>();
+            }
+
+            public void Insert(double x, double y, ulong id)
+            {
+                Insert((x, (y, id)), default(T));
+                points_map[(x, y)] = id;
+            }
+
+            public void Erase(double x, double y)
+            {
+                if (!points_map.ContainsKey((x, y)))
+                {
+                    return;
+                }
+                Erase((x, (y, points_map[(x, y)])));
+                points_map.Remove((x, y));
+            }
+
+            public bool Find(double lx, double rx, double ly, double ry, out ulong id)
+            {
+                T value;
+                (double, (double, ulong)) key;
+                bool ans = Find((lx, (ly, 0)), (rx, (ry, 0)), out key, out value);
+                id = key.Item2.Item2;
+                return ans;
+            }
+        }
+
+        public class Dictionary2d : Dictionary2d<object> { }
+
+        public class Dictionary3d<T> : GeneralDictionary<double, (double, (double, ulong)), Dictionary2d<(double, T)>, T>
+        {
+            Dictionary<Vector3, ulong> points_map;
+
+            public Dictionary3d() : base()
+            {
+                points_map = new Dictionary<Vector3, ulong>();
+            }
+
+            public void Insert(Vector3 p, ulong id)
+            {
+                Insert((p.X, (p.Y, (p.Z, id))), default(T));
+                points_map[p] = id;
+            }
+
+            public void Insert(double x, double y, double z, ulong id)
+            {
+                Insert(new Vector3(x, y, z), id);
+            }
+
+            public void Erase(Vector3 p)
+            {
+                if (!points_map.ContainsKey(p))
+                {
+                    return;
+                }
+                Erase((p.X, (p.Y, (p.Z, points_map[p]))));
+                points_map.Remove(p);
+            }
+
+            public void Erase(double x, double y, double z)
+            {
+                Erase(new Vector3(x, y, z));
+            }
+
+            public bool Find(Vector3 l, Vector3 r, out ulong id)
+            {
+                T value;
+                (double, (double, (double, ulong))) key;
+                bool ans = Find((l.X, (l.Y, (l.Z, 0))), (r.X, (r.Y, (r.Z, 0))), out key, out value);
+                id = key.Item2.Item2.Item2;
+                return ans;
+            }
+
+            public bool Find(double lx, double rx, double ly, double ry, double lz, double rz, out ulong id)
+            {
+                return Find(new Vector3(lx, ly, lz), new Vector3(rx, ry, rz), out id);
+            }
+        }
+
+        public class Dictionary3d : Dictionary3d<object> { }
 
         #endregion
 
