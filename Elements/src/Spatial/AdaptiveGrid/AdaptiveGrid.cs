@@ -40,7 +40,8 @@ namespace Elements.Spatial.AdaptiveGrid
         private Dictionary<string, ulong> _edgesLookup = new Dictionary<string, ulong>();
 
         // Vertex lookup by x, y, z coordinate.
-        private Dictionary<double, Dictionary<double, Dictionary<double, ulong>>> _verticesLookup = new Dictionary<double, Dictionary<double, Dictionary<double, ulong>>>();
+        // private Dictionary<double, Dictionary<double, Dictionary<double, ulong>>> _verticesLookup = new Dictionary<double, Dictionary<double, Dictionary<double, ulong>>>();
+        private Searchable3d _verticesLookup = new GeneralSearchable3d<TreeTreeDic>();
 
         #endregion
 
@@ -52,7 +53,7 @@ namespace Elements.Spatial.AdaptiveGrid
 
             void Erase(TKey x);
 
-            bool Find(TKey lx, TKey rx, out TKey x, out TValue v);
+            bool Find(TKey lx, TKey rx, bool strict, out TKey x, out TValue v);
 
             int Size { get; }
         }
@@ -76,7 +77,7 @@ namespace Elements.Spatial.AdaptiveGrid
                 values.Remove(x);
             }
 
-            public bool Find(TKey lx, TKey rx, out TKey x, out TValue v)
+            public bool Find(TKey lx, TKey rx, bool strict, out TKey x, out TValue v)
             {
                 var t = values.First();
                 x = t.Key;
@@ -249,15 +250,15 @@ namespace Elements.Spatial.AdaptiveGrid
                     return true;
                 }
 
-                public bool Find(double lx, double rx, TKey2 ly, TKey2 ry, out (double, TKey2) key, out TValue value)
+                public bool Find(double lx, double rx, TKey2 ly, TKey2 ry, bool strict, out (double, TKey2) key, out TValue value)
                 {
                     key = items.Keys.First();
                     value = items[key];
                     TKey2 key2;
                     (double, TValue) bigValue;
-                    if (lx < l && r <= rx)
+                    if ((strict && lx < l && r <= rx) || (!strict && lx <= l && r <= rx))
                     {
-                        if (!subtree.Find(ly, ry, out key2, out bigValue))
+                        if (!subtree.Find(ly, ry, strict, out key2, out bigValue))
                         {
                             return false;
                         }
@@ -265,11 +266,11 @@ namespace Elements.Spatial.AdaptiveGrid
                         value = bigValue.Item2;
                         return true;
                     }
-
+                    
                     if (leaf)
                     {
                         double x = xs.Keys.First();
-                        if (x <= lx || rx <= x || !subtree.Find(ly, ry, out key2, out bigValue))
+                        if (x < lx || rx < x || (strict && (x == lx || x == rx)) || !subtree.Find(ly, ry, strict, out key2, out bigValue))
                         {
                             return false;
                         }
@@ -277,17 +278,21 @@ namespace Elements.Spatial.AdaptiveGrid
                         value = bigValue.Item2;
                         return true;
                     }
-
+                    
+                    if (leaf)
+                    {
+                        return false;
+                    }
                     if (lx < m)
                     {
-                        if (left != null && left.Find(lx, rx, ly, ry, out key, out value))
+                        if (left != null && left.Find(lx, rx, ly, ry, strict, out key, out value))
                         {
                             return true;
                         }
                     }
-                    if (m < rx)
+                    if (m < rx || (!strict && m == rx))
                     {
-                        if (right != null && right.Find(lx, rx, ly, ry, out key, out value))
+                        if (right != null && right.Find(lx, rx, ly, ry, strict, out key, out value))
                         {
                             return true;
                         }
@@ -343,53 +348,20 @@ namespace Elements.Spatial.AdaptiveGrid
                 }
             }
 
-            public bool Find((double, TKey2) l, (double, TKey2) r, out (double, TKey2) key, out TValue value)
+            public bool Find((double, TKey2) l, (double, TKey2) r, bool strict, out (double, TKey2) key, out TValue value)
             {
-                if (root == null || root.r <= l.Item1 || r.Item1 <= root.l)
+                if (root == null || root.r < l.Item1 || r.Item1 < root.l || (strict && (root.r == l.Item1 || root.l == r.Item1)))
                 {
                     key = (0, default(TKey2));
                     value = default(TValue);
                     return false;
                 }
 
-                return root.Find(l.Item1, r.Item1, l.Item2, r.Item2, out key, out value);
+                return root.Find(l.Item1, r.Item1, l.Item2, r.Item2, strict, out key, out value);
             }
         }
 
-        public class SegmentTree1d<T> : GeneralSegmentTree<ulong, SingleContainer<ulong, (double, T)>, T>
-        {
-            private Dictionary<double, ulong> points;
-
-            public SegmentTree1d() : base()
-            {
-                points = new Dictionary<double, ulong>();
-            }
-
-            public void Insert(double x, ulong id)
-            {
-                Insert((x, id), default(T));
-                points[x] = id;
-            }
-
-            public void Erase(double x)
-            {
-                if (!points.ContainsKey(x))
-                {
-                    return;
-                }
-                Erase((x, points[x]));
-                points.Remove(x);
-            }
-
-            public bool Find(double lx, double rx, out ulong id)
-            {
-                T tmp;
-                (double, ulong) key;
-                bool ans = Find((lx, 0), (rx, 0), out key, out tmp);
-                id = key.Item2;
-                return ans;
-            }
-        }
+        public class SegmentTree1d<T> : GeneralSegmentTree<ulong, SingleContainer<ulong, (double, T)>, T> { }
 
         public class GeneralDictionary<TKey1, TKey2, TTree, TValue>: GeneralSearchable<(TKey1, TKey2), TValue>
             where TKey1: IComparable<TKey1>
@@ -433,13 +405,13 @@ namespace Elements.Spatial.AdaptiveGrid
                 }
             }
 
-            public bool Find((TKey1, TKey2) l, (TKey1, TKey2) r, out (TKey1, TKey2) key, out TValue value)
+            public bool Find((TKey1, TKey2) l, (TKey1, TKey2) r, bool strict, out (TKey1, TKey2) key, out TValue value)
             {
                 TKey2 key2;
                 (TKey1, TValue) bigValue;
                 foreach (var item in values)
                 {
-                    if (l.Item1.CompareTo(item.Key) < 0 && r.Item1.CompareTo(item.Key) > 0 && item.Value.Find(l.Item2, r.Item2, out key2, out bigValue))
+                    if (((strict && l.Item1.CompareTo(item.Key) < 0 && r.Item1.CompareTo(item.Key) > 0) || (!strict && l.Item1.CompareTo(item.Key) <= 0 && r.Item1.CompareTo(item.Key) >= 0)) && item.Value.Find(l.Item2, r.Item2, strict, out key2, out bigValue))
                     {
                         key = (bigValue.Item1, key2);
                         value = bigValue.Item2;
@@ -453,328 +425,21 @@ namespace Elements.Spatial.AdaptiveGrid
             }
         }
 
-        public class Dictionary1d<T> : GeneralDictionary<double, ulong, SingleContainer<ulong, (double, T)>, T>
-        {
-            Dictionary<double, ulong> points_map;
-
-            public Dictionary1d() : base()
-            {
-                points_map = new Dictionary<double, ulong>();
-            }
-
-            public void Insert(double x, ulong id)
-            {
-                Insert((x, id), default(T));
-                points_map[x] = id;
-            }
-
-            public void Erase(double x)
-            {
-                if (!points_map.ContainsKey(x))
-                {
-                    return;
-                }
-                Erase((x, points_map[x]));
-                points_map.Remove(x);
-            }
-
-            public bool Find(double lx, double rx, out ulong id)
-            {
-                T value;
-                (double, ulong) key;
-                bool ans = Find((lx, 0), (rx, 0), out key, out value);
-                id = key.Item2;
-                return ans;
-            }
-        }
+        public class Dictionary1d<T> : GeneralDictionary<double, ulong, SingleContainer<ulong, (double, T)>, T> { }
 
         public class DicTree<T> : GeneralDictionary<double, (double, ulong), SegmentTree1d<(double, T)>, T> { }
         public class TreeDic<T> : GeneralSegmentTree<(double, ulong), Dictionary1d<(double, T)>, T> { }
         public class DicDic<T> : GeneralDictionary<double, (double, ulong), Dictionary1d<(double, T)>, T> { }
         public class TreeTree<T> : GeneralSegmentTree<(double, ulong), SegmentTree1d<(double, T)>, T> { }
 
-        public interface Searchable3d
-        {
-            void Insert(double x, double y, double z, ulong id);
-
-            void Erase(double x, double y, double z);
-
-            bool Find(double lx, double rx, double ly, double ry, double lz, double rz, out ulong id);
-        }
-
-        public class DicDicDic<T> : GeneralDictionary<double, (double, (double, ulong)), DicDic<(double, T)>, T>, Searchable3d
-        {
-            private Dictionary<(double, double, double), ulong> values;
-
-            public DicDicDic(): base()
-            {
-                values = new Dictionary<(double, double, double), ulong>();
-            }
-
-            public void Insert(double x, double y, double z, ulong id)
-            {
-                Insert((x, (y, (z, id))), default(T));
-                values[(x, y, z)] = id;
-            }
-
-            public void Erase(double x, double y, double z)
-            {
-                if (!values.ContainsKey((x, y, z)))
-                {
-                    return;
-                }
-                Erase((x, (y, (z, values[(x, y, z)]))));
-                values.Remove((x, y, z));
-            }
-
-            public bool Find(double lx, double rx, double ly, double ry, double lz, double rz, out ulong id)
-            {
-                T tmp;
-                (double, (double, (double, ulong))) key;
-                bool ans = Find((lx, (ly, (lz, 0))), (rx, (ry, (rz, 0))), out key, out tmp);
-                id = key.Item2.Item2.Item2;
-                return ans;
-            }
-        }
-        public class DicDicTree<T> : GeneralDictionary<double, (double, (double, ulong)), DicTree<(double, T)>, T>, Searchable3d
-        {
-            private Dictionary<(double, double, double), ulong> values;
-
-            public DicDicTree() : base()
-            {
-                values = new Dictionary<(double, double, double), ulong>();
-            }
-
-            public void Insert(double x, double y, double z, ulong id)
-            {
-                Insert((x, (y, (z, id))), default(T));
-                values[(x, y, z)] = id;
-            }
-
-            public void Erase(double x, double y, double z)
-            {
-                if (!values.ContainsKey((x, y, z)))
-                {
-                    return;
-                }
-                Erase((x, (y, (z, values[(x, y, z)]))));
-                values.Remove((x, y, z));
-            }
-
-            public bool Find(double lx, double rx, double ly, double ry, double lz, double rz, out ulong id)
-            {
-                T tmp;
-                (double, (double, (double, ulong))) key;
-                bool ans = Find((lx, (ly, (lz, 0))), (rx, (ry, (rz, 0))), out key, out tmp);
-                id = key.Item2.Item2.Item2;
-                return ans;
-            }
-        }
-        public class DicTreeDic<T> : GeneralDictionary<double, (double, (double, ulong)), TreeDic<(double, T)>, T>, Searchable3d
-        {
-            private Dictionary<(double, double, double), ulong> values;
-
-            public DicTreeDic() : base()
-            {
-                values = new Dictionary<(double, double, double), ulong>();
-            }
-
-            public void Insert(double x, double y, double z, ulong id)
-            {
-                Insert((x, (y, (z, id))), default(T));
-                values[(x, y, z)] = id;
-            }
-
-            public void Erase(double x, double y, double z)
-            {
-                if (!values.ContainsKey((x, y, z)))
-                {
-                    return;
-                }
-                Erase((x, (y, (z, values[(x, y, z)]))));
-                values.Remove((x, y, z));
-            }
-
-            public bool Find(double lx, double rx, double ly, double ry, double lz, double rz, out ulong id)
-            {
-                T tmp;
-                (double, (double, (double, ulong))) key;
-                bool ans = Find((lx, (ly, (lz, 0))), (rx, (ry, (rz, 0))), out key, out tmp);
-                id = key.Item2.Item2.Item2;
-                return ans;
-            }
-        }
-        public class DicTreeTree<T> : GeneralDictionary<double, (double, (double, ulong)), TreeTree<(double, T)>, T>, Searchable3d
-        {
-            private Dictionary<(double, double, double), ulong> values;
-
-            public DicTreeTree() : base()
-            {
-                values = new Dictionary<(double, double, double), ulong>();
-            }
-
-            public void Insert(double x, double y, double z, ulong id)
-            {
-                Insert((x, (y, (z, id))), default(T));
-                values[(x, y, z)] = id;
-            }
-
-            public void Erase(double x, double y, double z)
-            {
-                if (!values.ContainsKey((x, y, z)))
-                {
-                    return;
-                }
-                Erase((x, (y, (z, values[(x, y, z)]))));
-                values.Remove((x, y, z));
-            }
-
-            public bool Find(double lx, double rx, double ly, double ry, double lz, double rz, out ulong id)
-            {
-                T tmp;
-                (double, (double, (double, ulong))) key;
-                bool ans = Find((lx, (ly, (lz, 0))), (rx, (ry, (rz, 0))), out key, out tmp);
-                id = key.Item2.Item2.Item2;
-                return ans;
-            }
-        }
-        public class TreeDicDic<T> : GeneralSegmentTree<(double, (double, ulong)), DicDic<(double, T)>, T>, Searchable3d
-        {
-            private Dictionary<(double, double, double), ulong> values;
-
-            public TreeDicDic() : base()
-            {
-                values = new Dictionary<(double, double, double), ulong>();
-            }
-
-            public void Insert(double x, double y, double z, ulong id)
-            {
-                Insert((x, (y, (z, id))), default(T));
-                values[(x, y, z)] = id;
-            }
-
-            public void Erase(double x, double y, double z)
-            {
-                if (!values.ContainsKey((x, y, z)))
-                {
-                    return;
-                }
-                Erase((x, (y, (z, values[(x, y, z)]))));
-                values.Remove((x, y, z));
-            }
-
-            public bool Find(double lx, double rx, double ly, double ry, double lz, double rz, out ulong id)
-            {
-                T tmp;
-                (double, (double, (double, ulong))) key;
-                bool ans = Find((lx, (ly, (lz, 0))), (rx, (ry, (rz, 0))), out key, out tmp);
-                id = key.Item2.Item2.Item2;
-                return ans;
-            }
-        }
-        public class TreeDicTree<T> : GeneralSegmentTree<(double, (double, ulong)), DicTree<(double, T)>, T>, Searchable3d
-        {
-            private Dictionary<(double, double, double), ulong> values;
-
-            public TreeDicTree() : base()
-            {
-                values = new Dictionary<(double, double, double), ulong>();
-            }
-
-            public void Insert(double x, double y, double z, ulong id)
-            {
-                Insert((x, (y, (z, id))), default(T));
-                values[(x, y, z)] = id;
-            }
-
-            public void Erase(double x, double y, double z)
-            {
-                if (!values.ContainsKey((x, y, z)))
-                {
-                    return;
-                }
-                Erase((x, (y, (z, values[(x, y, z)]))));
-                values.Remove((x, y, z));
-            }
-
-            public bool Find(double lx, double rx, double ly, double ry, double lz, double rz, out ulong id)
-            {
-                T tmp;
-                (double, (double, (double, ulong))) key;
-                bool ans = Find((lx, (ly, (lz, 0))), (rx, (ry, (rz, 0))), out key, out tmp);
-                id = key.Item2.Item2.Item2;
-                return ans;
-            }
-        }
-        public class TreeTreeDic<T> : GeneralSegmentTree<(double, (double, ulong)), TreeDic<(double, T)>, T>, Searchable3d
-        {
-            private Dictionary<(double, double, double), ulong> values;
-
-            public TreeTreeDic() : base()
-            {
-                values = new Dictionary<(double, double, double), ulong>();
-            }
-
-            public void Insert(double x, double y, double z, ulong id)
-            {
-                Insert((x, (y, (z, id))), default(T));
-                values[(x, y, z)] = id;
-            }
-
-            public void Erase(double x, double y, double z)
-            {
-                if (!values.ContainsKey((x, y, z)))
-                {
-                    return;
-                }
-                Erase((x, (y, (z, values[(x, y, z)]))));
-                values.Remove((x, y, z));
-            }
-
-            public bool Find(double lx, double rx, double ly, double ry, double lz, double rz, out ulong id)
-            {
-                T tmp;
-                (double, (double, (double, ulong))) key;
-                bool ans = Find((lx, (ly, (lz, 0))), (rx, (ry, (rz, 0))), out key, out tmp);
-                id = key.Item2.Item2.Item2;
-                return ans;
-            }
-        }
-        public class TreeTreeTree<T> : GeneralSegmentTree<(double, (double, ulong)), TreeTree<(double, T)>, T>, Searchable3d
-        {
-            private Dictionary<(double, double, double), ulong> values;
-
-            public TreeTreeTree() : base()
-            {
-                values = new Dictionary<(double, double, double), ulong>();
-            }
-
-            public void Insert(double x, double y, double z, ulong id)
-            {
-                Insert((x, (y, (z, id))), default(T));
-                values[(x, y, z)] = id;
-            }
-
-            public void Erase(double x, double y, double z)
-            {
-                if (!values.ContainsKey((x, y, z)))
-                {
-                    return;
-                }
-                Erase((x, (y, (z, values[(x, y, z)]))));
-                values.Remove((x, y, z));
-            }
-
-            public bool Find(double lx, double rx, double ly, double ry, double lz, double rz, out ulong id)
-            {
-                T tmp;
-                (double, (double, (double, ulong))) key;
-                bool ans = Find((lx, (ly, (lz, 0))), (rx, (ry, (rz, 0))), out key, out tmp);
-                id = key.Item2.Item2.Item2;
-                return ans;
-            }
-        }
-
+        public class DicDicDic<T> : GeneralDictionary<double, (double, (double, ulong)), DicDic<(double, T)>, T> { }
+        public class DicDicTree<T> : GeneralDictionary<double, (double, (double, ulong)), DicTree<(double, T)>, T> { }
+        public class DicTreeDic<T> : GeneralDictionary<double, (double, (double, ulong)), TreeDic<(double, T)>, T> { }
+        public class DicTreeTree<T> : GeneralDictionary<double, (double, (double, ulong)), TreeTree<(double, T)>, T> { }
+        public class TreeDicDic<T> : GeneralSegmentTree<(double, (double, ulong)), DicDic<(double, T)>, T> { }
+        public class TreeDicTree<T> : GeneralSegmentTree<(double, (double, ulong)), DicTree<(double, T)>, T> { }
+        public class TreeTreeDic<T> : GeneralSegmentTree<(double, (double, ulong)), TreeDic<(double, T)>, T> { }
+        public class TreeTreeTree<T> : GeneralSegmentTree<(double, (double, ulong)), TreeTree<(double, T)>, T> { }
         public class DicDicDic : DicDicDic<object> { }
         public class DicDicTree : DicDicTree<object> { }
         public class DicTreeDic : DicTreeDic<object> { }
@@ -783,6 +448,59 @@ namespace Elements.Spatial.AdaptiveGrid
         public class TreeDicTree : TreeDicTree<object> { }
         public class TreeTreeDic : TreeTreeDic<object> { }
         public class TreeTreeTree : TreeTreeTree<object> { }
+
+        public interface Searchable3d<TKey0, TKey1, TKey2, TKey3>
+        {
+            void Insert(TKey0 x, TKey1 y, TKey2 z, TKey3 id);
+
+            void Erase(TKey0 x, TKey1 y, TKey2 z, TKey3 id);
+
+            bool Find(TKey0 lx, TKey0 rx, TKey1 ly, TKey1 ry, TKey2 lz, TKey2 rz, bool strict, out TKey3 id);
+        }
+
+        public class GeneralSearchable3d<T, TKey0, TKey1, TKey2, TKey3> : Searchable3d<TKey0, TKey1, TKey2, TKey3>
+            where T : GeneralSearchable<(TKey0, (TKey1, (TKey2, TKey3))), object>, new()
+        {
+            T tree;
+            HashSet<(TKey0, TKey1, TKey2, TKey3)> values;
+
+            public GeneralSearchable3d()
+            {
+                tree = new T();
+                values = new HashSet<(TKey0, TKey1, TKey2, TKey3)>();
+            }
+
+            public void Insert(TKey0 x, TKey1 y, TKey2 z, TKey3 id)
+            {
+                tree.Insert((x, (y, (z, id))), null);
+                values.Add((x, y, z, id));
+            }
+
+            public void Erase(TKey0 x, TKey1 y, TKey2 z, TKey3 id)
+            {
+                if (!values.Contains((x, y, z, id)))
+                {
+                    return;
+                }
+                tree.Erase((x, (y, (z, id))));
+                values.Remove((x, y, z, id));
+            }
+
+            public bool Find(TKey0 lx, TKey0 rx, TKey1 ly, TKey1 ry, TKey2 lz, TKey2 rz, bool strict, out TKey3 id)
+            {
+                object tmp;
+                (TKey0, (TKey1, (TKey2, TKey3))) key;
+                bool ans = tree.Find((lx, (ly, (lz, default(TKey3)))), (rx, (ry, (rz, default(TKey3)))), strict, out key, out tmp);
+                id = key.Item2.Item2.Item2;
+                return ans;
+            }
+        }
+
+        public interface Searchable3d: Searchable3d<double, double, double, ulong> { }
+
+        public class GeneralSearchable3d<T>: GeneralSearchable3d<T, double, double, double, ulong>, Searchable3d 
+            where T: GeneralSearchable<(double, (double, (double, ulong))), object>, new()
+        { }
 
         #endregion
 
@@ -1099,13 +817,18 @@ namespace Elements.Spatial.AdaptiveGrid
         /// <returns></returns>
         public bool TryGetVertexIndex(Vector3 point, out ulong id, double? tolerance = null)
         {
-            var zDict = GetAddressParent(_verticesLookup, point, tolerance: tolerance);
-            if (zDict == null)
+            if (tolerance.HasValue)
             {
-                id = 0;
-                return false;
+                return _verticesLookup.Find(
+                    point.X - tolerance.Value, 
+                    point.X + tolerance.Value, 
+                    point.Y - tolerance.Value, 
+                    point.Y + tolerance.Value, 
+                    point.Z - tolerance.Value, 
+                    point.Z + tolerance.Value, 
+                    true, out id);
             }
-            return TryGetValue(zDict, point.Z, out id, tolerance);
+            return _verticesLookup.Find(point.X, point.X, point.Y, point.Y, point.Z, point.Z, false, out id);
         }
 
         /// <summary>
@@ -1118,11 +841,10 @@ namespace Elements.Spatial.AdaptiveGrid
         {
             if (!TryGetVertexIndex(point, out var id, Tolerance))
             {
-                var zDict = GetAddressParent(_verticesLookup, point, true, Tolerance);
                 id = this._vertexId;
                 var vertex = new Vertex(id, point);
-                zDict[point.Z] = id;
                 _vertices[id] = vertex;
+                _verticesLookup.Insert(point.X, point.Y, point.Z, id);
                 this._vertexId++;
             }
 
@@ -2016,24 +1738,9 @@ namespace Elements.Spatial.AdaptiveGrid
 
         private void DeleteVertex(ulong id)
         {
-            var vertex = _vertices[id];
+            var v = _vertices[id];
             _vertices.Remove(id);
-            var zDict = GetAddressParent(_verticesLookup, vertex.Point, tolerance: Tolerance);
-            if (zDict == null)
-            {
-                return;
-            }
-            zDict.Remove(vertex.Point.Z);
-
-            TryGetValue(_verticesLookup, vertex.Point.X, out var yzDict, Tolerance);
-            if (zDict.Count == 0)
-            {
-                yzDict.Remove(vertex.Point.Y);
-            }
-            if (yzDict.Count == 0)
-            {
-                _verticesLookup.Remove(vertex.Point.X);
-            }
+            _verticesLookup.Erase(v.Point.X, v.Point.Y, v.Point.Z, id);
         }
 
         private Grid2d CreateGridFromPolygon(Polygon boundingPolygon)
