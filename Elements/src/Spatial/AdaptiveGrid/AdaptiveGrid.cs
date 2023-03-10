@@ -41,197 +41,181 @@ namespace Elements.Spatial.AdaptiveGrid
 
         // Vertex lookup by x, y, z coordinate.
         // private Dictionary<double, Dictionary<double, Dictionary<double, ulong>>> _verticesLookup = new Dictionary<double, Dictionary<double, Dictionary<double, ulong>>>();
-        private Searchable3d _verticesLookup = new GeneralSearchable3d<TreeTreeDic>();
+        private SegmentTree _verticesLookup = new SegmentTree();
 
         #endregion
 
         #region Segment Trees
 
-        public interface GeneralSearchable<TKey, TValue>
+        public class SegmentTree
         {
-            void Insert(TKey x, TValue v);
+            private SegmentTreeNode root;
 
-            void Erase(TKey x);
-
-            bool Find(TKey lx, TKey rx, bool strict, out TKey x, out TValue v);
-
-            int Size { get; }
-        }
-
-        public class SingleContainer<TKey, TValue> : GeneralSearchable<TKey, TValue>
-        {
-            Dictionary<TKey, TValue> values;
-
-            public SingleContainer()
-            {
-                values = new Dictionary<TKey, TValue>();
-            }
-
-            public void Insert(TKey x, TValue v)
-            {
-                values[x] = v;
-            }
-
-            public void Erase(TKey x)
-            {
-                values.Remove(x);
-            }
-
-            public bool Find(TKey lx, TKey rx, bool strict, out TKey x, out TValue v)
-            {
-                var t = values.First();
-                x = t.Key;
-                v = t.Value;
-                return true;
-            }
-
-            public int Size { get { return values.Count; } }
-        }
-
-        public class GeneralSegmentTree<TKey2, TTree, TValue> : GeneralSearchable<(double, TKey2), TValue>
-            where TTree : GeneralSearchable<TKey2, (double, TValue)>, new()
-        {
-            private GeneralSegmentTreeNode root;
-
-            private class GeneralSegmentTreeNode
+            private class SegmentTreeNode
             {
                 public double l, m, r;
-                public GeneralSegmentTreeNode left, right;
-                public TTree subtree;
-                public Dictionary<(double, TKey2), TValue> items;
+                public SegmentTreeNode left, right;
+                public Dictionary<double, Dictionary<double, Dictionary<ulong, double>>> points;
                 public Dictionary<double, int> xs;
 
-                public GeneralSegmentTreeNode(double l, double r, double? m = null)
+                public SegmentTreeNode(double l, double r, double? m = null)
                 {
                     this.l = l;
                     this.r = r;
                     this.m = m.HasValue ? m.Value : (l + r) / 2;
-                    subtree = new TTree();
+                    points = new Dictionary<double, Dictionary<double, Dictionary<ulong, double>>>();
                     left = right = null;
-                    items = new Dictionary<(double, TKey2), TValue>();
                     xs = new Dictionary<double, int>();
                 }
 
-                private void InsertPush((double x, TKey2 y) key, TValue value)
+                private void InsertPush(double x, double y, double z, ulong id)
                 {
-                    if (key.x < m)
+                    if (x < m)
                     {
                         if (left == null)
                         {
-                            left = new GeneralSegmentTreeNode(l, m);
+                            left = new SegmentTreeNode(l, m);
                         }
-                        left.Insert(key, value);
+                        left.Insert(x, y, z, id);
                     }
                     else
                     {
                         if (right == null)
                         {
-                            right = new GeneralSegmentTreeNode(m, r);
+                            right = new SegmentTreeNode(m, r);
                         }
-                        right.Insert(key, value);
+                        right.Insert(x, y, z, id);
                     }
                 }
 
-                private bool leaf { get { return left == null && right == null; } }
+                private bool Leaf { get { return left == null && right == null; } }
 
-                public void Insert((double x, TKey2 y) key, TValue value)
+                public void Insert(double x, double y, double z, ulong id)
                 {
-                    subtree.Insert(key.y, (key.x, value));
-                    items[key] = value;
-                    if (!xs.ContainsKey(key.x))
+                    if (!points.ContainsKey(y))
                     {
-                        xs[key.x] = 1;
+                        points[y] = new Dictionary<double, Dictionary<ulong, double>>();
+                    }
+                    if (!points[y].ContainsKey(z))
+                    {
+                        points[y][z] = new Dictionary<ulong, double>();
+                    }
+                    points[y][z][id] = x;
+                    if (!xs.ContainsKey(x))
+                    {
+                        xs[x] = 1;
                     }
                     else
                     {
-                        xs[key.x] += 1;
+                        xs[x] += 1;
                     }
 
-                    if (leaf)
+                    if (Leaf)
                     {
                         if (xs.Count < 2)
                         {
                             return;
                         }
-                        foreach (var item in items)
+                        foreach (var subpoint in points)
                         {
-                            InsertPush(item.Key, item.Value);
+                            foreach (var subsubpoint in subpoint.Value)
+                            {
+                                foreach (var iid in subsubpoint.Value)
+                                {
+                                    InsertPush(iid.Value, subpoint.Key, subsubpoint.Key, iid.Key);
+                                }
+                            }
                         }
                     }
                     else
                     {
-                        InsertPush(key, value);
+                        InsertPush(x, y, z, id);
                     }
                 }
 
-                public GeneralSegmentTreeNode extendUp(bool left)
+                public SegmentTreeNode ExtendUp(bool left)
                 {
-                    GeneralSegmentTreeNode node = null;
+                    SegmentTreeNode node = null;
                     if (left)
                     {
-                        node = new GeneralSegmentTreeNode(2 * l - r, r, l);
+                        node = new SegmentTreeNode(2 * l - r, r, l);
                         node.right = this;
 
                     }
                     else
                     {
-                        node = new GeneralSegmentTreeNode(l, 2 * r - l, r);
+                        node = new SegmentTreeNode(l, 2 * r - l, r);
                         node.left = this;
                     }
                     foreach (var x in xs)
                     {
                         node.xs[x.Key] = x.Value;
                     }
-                    foreach (var item in items)
+                    foreach (var subpoint in points)
                     {
-                        node.items[item.Key] = item.Value;
-                        node.subtree.Insert(item.Key.Item2, (item.Key.Item1, item.Value));
+                        node.points[subpoint.Key] = new Dictionary<double, Dictionary<ulong, double>>();
+                        foreach (var subsubpoint in subpoint.Value)
+                        {
+                            node.points[subpoint.Key][subsubpoint.Key] = new Dictionary<ulong, double>();
+                            foreach (var iid in subsubpoint.Value)
+                            {
+                                node.points[subpoint.Key][subsubpoint.Key][iid.Key] = iid.Value;
+                            }
+                        }
                     }
                     return node;
                 }
 
-                private void RemoveSure((double x, TKey2 y) key)
+                private void RemoveSure(double x, double y, double z, ulong id)
                 {
-                    items.Remove(key);
-                    if (xs[key.x] == 1)
+                    if (xs[x] == 1)
                     {
-                        xs.Remove(key.x);
+                        xs.Remove(x);
                     }
                     else
                     {
-                        xs[key.x] -= 1;
+                        xs[x] -= 1;
                     }
-                    subtree.Erase(key.y);
+
+                    points[y][z].Remove(id);
+                    if (points[y][z].Count == 0)
+                    {
+                        points[y].Remove(z);
+                    }
+                    if (points[y].Count == 0)
+                    {
+                        points.Remove(y);
+                    }
                 }
 
-                public bool Erase((double x, TKey2 y) key)
+                public bool Erase(double x, double y, double z, ulong id)
                 {
-                    if (leaf)
+                    if (Leaf)
                     {
-                        if (items.ContainsKey(key))
+                        if (points.ContainsKey(y) && points[y].ContainsKey(z) && points[y][z].ContainsKey(id))
                         {
-                            RemoveSure(key);
+                            RemoveSure(x, y, z, id);
                             return true;
                         }
                         return false;
                     }
 
-                    if (key.x < m)
+                    if (x < m)
                     {
-                        if (left == null || !left.Erase(key))
+                        if (left == null || !left.Erase(x, y, z, id))
                         {
                             return false;
                         }
                     }
                     else
                     {
-                        if (right == null || !right.Erase(key))
+                        if (right == null || !right.Erase(x, y, z, id))
                         {
                             return false;
                         }
                     }
 
-                    RemoveSure(key);
+                    RemoveSure(x, y, z, id);
                     if (xs.Count < 2)
                     {
                         left = right = null;
@@ -250,257 +234,131 @@ namespace Elements.Spatial.AdaptiveGrid
                     return true;
                 }
 
-                public bool Find(double lx, double rx, TKey2 ly, TKey2 ry, bool strict, out (double, TKey2) key, out TValue value)
+                private bool FindInDictionaries(double ly, double ry, double lz, double rz, bool strict, out ulong id)
                 {
-                    key = items.Keys.First();
-                    value = items[key];
-                    TKey2 key2;
-                    (double, TValue) bigValue;
+                    foreach (var subpoint in points)
+                    {
+                        if (strict && (subpoint.Key <= ly || ry <= subpoint.Key))
+                        {
+                            continue;
+                        }
+                        if (!strict && (subpoint.Key < ly || ry < subpoint.Key))
+                        {
+                            continue;
+                        }
+                        foreach (var subsubpoint in subpoint.Value)
+                        {
+                            if (strict && (subsubpoint.Key <= lz || rz <= subsubpoint.Key))
+                            {
+                                continue;
+                            }
+                            if (!strict && (subsubpoint.Key < lz || rz < subsubpoint.Key))
+                            {
+                                continue;
+                            }
+                            id = subsubpoint.Value.Keys.First();
+                            return true;
+                        }
+                    }
+                    id = 0;
+                    return false;
+                }
+
+                public bool Find(double lx, double rx, double ly, double ry, double lz, double rz, bool strict, out ulong id)
+                {
                     if ((strict && lx < l && r <= rx) || (!strict && lx <= l && r <= rx))
                     {
-                        if (!subtree.Find(ly, ry, strict, out key2, out bigValue))
-                        {
-                            return false;
-                        }
-                        key = (bigValue.Item1, key2);
-                        value = bigValue.Item2;
-                        return true;
+                        return FindInDictionaries(ly, ry, lz, rz, strict, out id);
                     }
                     
-                    if (leaf)
+                    if (Leaf)
                     {
                         double x = xs.Keys.First();
-                        if (x < lx || rx < x || (strict && (x == lx || x == rx)) || !subtree.Find(ly, ry, strict, out key2, out bigValue))
+                        if (x < lx || rx < x || (strict && (x == lx || x == rx)) || !FindInDictionaries(ly, ry, lz, rz, strict, out id))
                         {
+                            id = 0;
                             return false;
                         }
-                        key = (x, key2);
-                        value = bigValue.Item2;
                         return true;
                     }
                     
-                    if (leaf)
-                    {
-                        return false;
-                    }
                     if (lx < m)
                     {
-                        if (left != null && left.Find(lx, rx, ly, ry, strict, out key, out value))
+                        if (left != null && left.Find(lx, rx, ly, ry, lz, rz, strict, out id))
                         {
                             return true;
                         }
                     }
                     if (m < rx || (!strict && m == rx))
                     {
-                        if (right != null && right.Find(lx, rx, ly, ry, strict, out key, out value))
+                        if (right != null && right.Find(lx, rx, ly, ry, lz, rz, strict, out id))
                         {
                             return true;
                         }
                     }
 
+                    id = 0;
                     return false;
                 }
             }
 
-            private (double min, double max) heuristicRange(double x)
+            private (double min, double max) HeuristicRange(double x)
             {
                 x = Math.Abs(x);
                 return x < 1e-16 ? (-1, 1) : (-2 * x, 2 * x);
             }
 
-            public GeneralSegmentTree()
+            public SegmentTree()
             {
                 root = null;
             }
 
-            public int Size { get { return root == null ? 0 : root.items.Count; } }
-
-            public void Insert((double, TKey2) key, TValue value)
+            public void Insert(double x, double y, double z, ulong id)
             {
                 if (root == null)
                 {
-                    var range = heuristicRange(key.Item1);
-                    root = new GeneralSegmentTreeNode(range.min, range.max);
+                    var range = HeuristicRange(x);
+                    root = new SegmentTreeNode(range.min, range.max);
                 }
 
-                while (key.Item1 < root.l)
+                while (x < root.l)
                 {
-                    root = root.extendUp(true);
+                    root = root.ExtendUp(true);
                 }
-                while (root.r <= key.Item1)
+                while (root.r <= x)
                 {
-                    root = root.extendUp(false);
+                    root = root.ExtendUp(false);
                 }
-                root.Insert(key, value);
+                root.Insert(x, y, z, id);
             }
 
-            public void Erase((double, TKey2) key)
+            public void Erase(double x, double y, double z, ulong id)
             {
-                if (root == null || key.Item1 < root.l || root.r <= key.Item1)
+                if (root == null || x < root.l || root.r <= x)
                 {
                     return;
                 }
 
-                root.Erase(key);
+                root.Erase(x, y, z, id);
                 if (root.xs.Count == 0)
                 {
                     root = null;
                 }
             }
 
-            public bool Find((double, TKey2) l, (double, TKey2) r, bool strict, out (double, TKey2) key, out TValue value)
+            public bool Find(double lx, double rx, double ly, double ry, double lz, double rz, bool strict, out ulong id)
             {
-                if (root == null || root.r < l.Item1 || r.Item1 < root.l || (strict && (root.r == l.Item1 || root.l == r.Item1)))
+                if (root == null || 
+                   ( strict && (root.r <= lx || rx <= root.l)) || 
+                   (!strict && (root.r <= lx || rx <  root.l)))
                 {
-                    key = (0, default(TKey2));
-                    value = default(TValue);
+                    id = 0;
                     return false;
                 }
 
-                return root.Find(l.Item1, r.Item1, l.Item2, r.Item2, strict, out key, out value);
+                return root.Find(lx, rx, ly, ry, lz, rz, strict, out id);
             }
         }
-
-        public class SegmentTree1d<T> : GeneralSegmentTree<ulong, SingleContainer<ulong, (double, T)>, T> { }
-
-        public class GeneralDictionary<TKey1, TKey2, TTree, TValue>: GeneralSearchable<(TKey1, TKey2), TValue>
-            where TKey1: IComparable<TKey1>
-            where TTree: GeneralSearchable<TKey2, (TKey1, TValue)>, new()
-        {
-            Dictionary<TKey1, TTree> values;
-            int sz;
-
-            public GeneralDictionary()
-            {
-                values = new Dictionary<TKey1, TTree>();
-                sz = 0;
-            }
-
-            public int Size { get { return sz; } }
-
-            public void Insert((TKey1, TKey2) key, TValue value)
-            {
-                if (!values.ContainsKey(key.Item1))
-                {
-                    values[key.Item1] = new TTree();
-                }
-                values[key.Item1].Insert(key.Item2, (key.Item1, value));
-                sz += 1;
-            }
-
-            public void Erase((TKey1, TKey2) key)
-            {
-                if (!values.ContainsKey(key.Item1))
-                {
-                    return;
-                }
-                sz -= 1;
-                if (values[key.Item1].Size == 1)
-                {
-                    values.Remove(key.Item1);
-                }
-                else
-                {
-                    values[key.Item1].Erase(key.Item2);
-                }
-            }
-
-            public bool Find((TKey1, TKey2) l, (TKey1, TKey2) r, bool strict, out (TKey1, TKey2) key, out TValue value)
-            {
-                TKey2 key2;
-                (TKey1, TValue) bigValue;
-                foreach (var item in values)
-                {
-                    if (((strict && l.Item1.CompareTo(item.Key) < 0 && r.Item1.CompareTo(item.Key) > 0) || (!strict && l.Item1.CompareTo(item.Key) <= 0 && r.Item1.CompareTo(item.Key) >= 0)) && item.Value.Find(l.Item2, r.Item2, strict, out key2, out bigValue))
-                    {
-                        key = (bigValue.Item1, key2);
-                        value = bigValue.Item2;
-                        return true;
-                    }
-                }
-
-                key = l;
-                value = default(TValue);
-                return false;
-            }
-        }
-
-        public class Dictionary1d<T> : GeneralDictionary<double, ulong, SingleContainer<ulong, (double, T)>, T> { }
-
-        public class DicTree<T> : GeneralDictionary<double, (double, ulong), SegmentTree1d<(double, T)>, T> { }
-        public class TreeDic<T> : GeneralSegmentTree<(double, ulong), Dictionary1d<(double, T)>, T> { }
-        public class DicDic<T> : GeneralDictionary<double, (double, ulong), Dictionary1d<(double, T)>, T> { }
-        public class TreeTree<T> : GeneralSegmentTree<(double, ulong), SegmentTree1d<(double, T)>, T> { }
-
-        public class DicDicDic<T> : GeneralDictionary<double, (double, (double, ulong)), DicDic<(double, T)>, T> { }
-        public class DicDicTree<T> : GeneralDictionary<double, (double, (double, ulong)), DicTree<(double, T)>, T> { }
-        public class DicTreeDic<T> : GeneralDictionary<double, (double, (double, ulong)), TreeDic<(double, T)>, T> { }
-        public class DicTreeTree<T> : GeneralDictionary<double, (double, (double, ulong)), TreeTree<(double, T)>, T> { }
-        public class TreeDicDic<T> : GeneralSegmentTree<(double, (double, ulong)), DicDic<(double, T)>, T> { }
-        public class TreeDicTree<T> : GeneralSegmentTree<(double, (double, ulong)), DicTree<(double, T)>, T> { }
-        public class TreeTreeDic<T> : GeneralSegmentTree<(double, (double, ulong)), TreeDic<(double, T)>, T> { }
-        public class TreeTreeTree<T> : GeneralSegmentTree<(double, (double, ulong)), TreeTree<(double, T)>, T> { }
-        public class DicDicDic : DicDicDic<object> { }
-        public class DicDicTree : DicDicTree<object> { }
-        public class DicTreeDic : DicTreeDic<object> { }
-        public class DicTreeTree : DicTreeTree<object> { }
-        public class TreeDicDic : TreeDicDic<object> { }
-        public class TreeDicTree : TreeDicTree<object> { }
-        public class TreeTreeDic : TreeTreeDic<object> { }
-        public class TreeTreeTree : TreeTreeTree<object> { }
-
-        public interface Searchable3d<TKey0, TKey1, TKey2, TKey3>
-        {
-            void Insert(TKey0 x, TKey1 y, TKey2 z, TKey3 id);
-
-            void Erase(TKey0 x, TKey1 y, TKey2 z, TKey3 id);
-
-            bool Find(TKey0 lx, TKey0 rx, TKey1 ly, TKey1 ry, TKey2 lz, TKey2 rz, bool strict, out TKey3 id);
-        }
-
-        public class GeneralSearchable3d<T, TKey0, TKey1, TKey2, TKey3> : Searchable3d<TKey0, TKey1, TKey2, TKey3>
-            where T : GeneralSearchable<(TKey0, (TKey1, (TKey2, TKey3))), object>, new()
-        {
-            T tree;
-            HashSet<(TKey0, TKey1, TKey2, TKey3)> values;
-
-            public GeneralSearchable3d()
-            {
-                tree = new T();
-                values = new HashSet<(TKey0, TKey1, TKey2, TKey3)>();
-            }
-
-            public void Insert(TKey0 x, TKey1 y, TKey2 z, TKey3 id)
-            {
-                tree.Insert((x, (y, (z, id))), null);
-                values.Add((x, y, z, id));
-            }
-
-            public void Erase(TKey0 x, TKey1 y, TKey2 z, TKey3 id)
-            {
-                if (!values.Contains((x, y, z, id)))
-                {
-                    return;
-                }
-                tree.Erase((x, (y, (z, id))));
-                values.Remove((x, y, z, id));
-            }
-
-            public bool Find(TKey0 lx, TKey0 rx, TKey1 ly, TKey1 ry, TKey2 lz, TKey2 rz, bool strict, out TKey3 id)
-            {
-                object tmp;
-                (TKey0, (TKey1, (TKey2, TKey3))) key;
-                bool ans = tree.Find((lx, (ly, (lz, default(TKey3)))), (rx, (ry, (rz, default(TKey3)))), strict, out key, out tmp);
-                id = key.Item2.Item2.Item2;
-                return ans;
-            }
-        }
-
-        public interface Searchable3d: Searchable3d<double, double, double, ulong> { }
-
-        public class GeneralSearchable3d<T>: GeneralSearchable3d<T, double, double, double, ulong>, Searchable3d 
-            where T: GeneralSearchable<(double, (double, (double, ulong))), object>, new()
-        { }
 
         #endregion
 
