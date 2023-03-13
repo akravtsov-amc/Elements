@@ -55,7 +55,7 @@ namespace Elements.Spatial.AdaptiveGrid
             {
                 public double l, m, r;
                 public SegmentTreeNode left, right;
-                public Dictionary<double, Dictionary<double, HashSet<ulong>>> points;
+                public Dictionary<double, Dictionary<double, ulong>> points;
                 double pointX;
 
                 public SegmentTreeNode(double l, double r, double? m = null)
@@ -63,7 +63,7 @@ namespace Elements.Spatial.AdaptiveGrid
                     this.l = l;
                     this.r = r;
                     this.m = m.HasValue ? m.Value : (l + r) / 2;
-                    points = new Dictionary<double, Dictionary<double, HashSet<ulong>>>();
+                    points = new Dictionary<double, Dictionary<double, ulong>>();
                     left = right = null;
                 }
 
@@ -93,15 +93,12 @@ namespace Elements.Spatial.AdaptiveGrid
                     {
                         if (points.Count == 0 || pointX == x)
                         {
+                            pointX = x;
                             if (!points.ContainsKey(y))
                             {
-                                points[y] = new Dictionary<double, HashSet<ulong>>();
+                                points[y] = new Dictionary<double, ulong>();
                             }
-                            if (!points[y].ContainsKey(z))
-                            {
-                                points[y][z] = new HashSet<ulong>();
-                            }
-                            points[y][z].Add(id);
+                            points[y][z] = id;
                             return;
                         }
 
@@ -109,10 +106,7 @@ namespace Elements.Spatial.AdaptiveGrid
                         {
                             foreach (var subsubpoint in subpoint.Value)
                             {
-                                foreach (var iid in subsubpoint.Value)
-                                {
-                                    InsertPush(pointX, subpoint.Key, subsubpoint.Key, iid);
-                                }
+                                InsertPush(pointX, subpoint.Key, subsubpoint.Key, subsubpoint.Value);
                             }
                         }
                         points = null;
@@ -127,26 +121,22 @@ namespace Elements.Spatial.AdaptiveGrid
                     {
                         node = new SegmentTreeNode(2 * l - r, r, l);
                         node.right = this;
-
+                        node.points = null;
                     }
                     else
                     {
                         node = new SegmentTreeNode(l, 2 * r - l, r);
                         node.left = this;
+                        node.points = null;
                     }
                     return node;
                 }
 
-                public void Erase(double x, double y, double z, ulong id)
+                public void Erase(double x, double y, double z)
                 {
                     if (points != null)
                     {
-                        if (!points.ContainsKey(y) || !points[y].ContainsKey(z) || !points[y][z].Contains(id))
-                        {
-                            return;
-                        }
-                        points[y][z].Remove(id);
-                        if (points[y][z].Count != 0)
+                        if (!points.ContainsKey(y) || !points[y].ContainsKey(z))
                         {
                             return;
                         }
@@ -165,7 +155,7 @@ namespace Elements.Spatial.AdaptiveGrid
                         {
                             return;
                         }
-                        left.Erase(x, y, z, id);
+                        left.Erase(x, y, z);
 
                         if (right == null && left.points != null)
                         {
@@ -190,7 +180,7 @@ namespace Elements.Spatial.AdaptiveGrid
                         {
                             return;
                         }
-                        right.Erase(x, y, z, id);
+                        right.Erase(x, y, z);
 
                         if (left == null && right.points != null)
                         {
@@ -225,7 +215,7 @@ namespace Elements.Spatial.AdaptiveGrid
                             {
                                 continue;
                             }
-                            id = subsubpoint.Value.First();
+                            id = subsubpoint.Value;
                             return true;
                         }
                     }
@@ -318,14 +308,14 @@ namespace Elements.Spatial.AdaptiveGrid
                 root.Insert(x, y, z, id);
             }
 
-            public void Erase(double x, double y, double z, ulong id)
+            public void Erase(double x, double y, double z)
             {
                 if (root == null || x < root.l || root.r <= x)
                 {
                     return;
                 }
 
-                root.Erase(x, y, z, id);
+                root.Erase(x, y, z);
                 if (root.points != null && root.points.Count == 0)
                 {
                     root = null;
@@ -1584,7 +1574,7 @@ namespace Elements.Spatial.AdaptiveGrid
         {
             var v = _vertices[id];
             _vertices.Remove(id);
-            _verticesLookup.Erase(v.Point.X, v.Point.Y, v.Point.Z, id);
+            _verticesLookup.Erase(v.Point.X, v.Point.Y, v.Point.Z);
         }
 
         private Grid2d CreateGridFromPolygon(Polygon boundingPolygon)
