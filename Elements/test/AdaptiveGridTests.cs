@@ -6,11 +6,21 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using Xunit;
+using System.Diagnostics;
+using System.IO;
 
 namespace Elements.Tests
 {
     public class AdaptiveGridTests : ModelTest
     {
+        [Fact]
+        public void SegmentTreeTest()
+        {
+            var tree = new AdaptiveGrid.SegmentTree();
+            ulong id;
+
+        }
+
         [Fact, Trait("Category", "Examples")]
         public void AdaptiveGridPolygonKeyPointsExample()
         {
@@ -632,7 +642,7 @@ namespace Elements.Tests
         {
             var grid = new AdaptiveGrid();
             grid.AddFromPolygon(Polygon.Rectangle(new Vector3(0, 0), new Vector3(10, 10)),
-                                new List<Vector3> {});
+                                new List<Vector3> { });
 
             //Default HintExtendDistance is 3.
             var toExtend = new Vector3[] { new Vector3(1, 3), new Vector3(1, 6) };
@@ -1025,7 +1035,7 @@ namespace Elements.Tests
             Assert.Null(s.MiddleVertex);
             Assert.Contains(startVertex.Edges, e => e.StartId == s.EndVertex.Id || e.EndId == s.EndVertex.Id);
         }
-        
+
         [Fact]
         public void AdaptiveGridStoreAndDuplicateElevation()
         {

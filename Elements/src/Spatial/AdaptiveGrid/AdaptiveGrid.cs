@@ -40,7 +40,300 @@ namespace Elements.Spatial.AdaptiveGrid
         private Dictionary<string, ulong> _edgesLookup = new Dictionary<string, ulong>();
 
         // Vertex lookup by x, y, z coordinate.
-        private Dictionary<double, Dictionary<double, Dictionary<double, ulong>>> _verticesLookup = new Dictionary<double, Dictionary<double, Dictionary<double, ulong>>>();
+        // private Dictionary<double, Dictionary<double, Dictionary<double, ulong>>> _verticesLookup = new Dictionary<double, Dictionary<double, Dictionary<double, ulong>>>();
+        private SegmentTree _verticesLookup = new SegmentTree();
+
+        #endregion
+
+        #region Segment Trees
+
+        public class SegmentTree
+        {
+            private SegmentTreeNode root;
+
+            private class SegmentTreeNode
+            {
+                public double l, m, r;
+                public SegmentTreeNode left, right;
+                public Dictionary<double, Dictionary<double, ulong>> points;
+                double pointX;
+
+                public SegmentTreeNode(double l, double r, double? m = null)
+                {
+                    this.l = l;
+                    this.r = r;
+                    this.m = m.HasValue ? m.Value : (l + r) / 2;
+                    points = new Dictionary<double, Dictionary<double, ulong>>();
+                    left = right = null;
+                }
+
+                private void InsertPush(double x, double y, double z, ulong id)
+                {
+                    if (x < m)
+                    {
+                        if (left == null)
+                        {
+                            left = new SegmentTreeNode(l, m);
+                        }
+                        left.Insert(x, y, z, id);
+                    }
+                    else
+                    {
+                        if (right == null)
+                        {
+                            right = new SegmentTreeNode(m, r);
+                        }
+                        right.Insert(x, y, z, id);
+                    }
+                }
+
+                public void Insert(double x, double y, double z, ulong id)
+                {
+                    if (points != null)
+                    {
+                        if (points.Count == 0 || pointX == x)
+                        {
+                            pointX = x;
+                            if (!points.ContainsKey(y))
+                            {
+                                points[y] = new Dictionary<double, ulong>();
+                            }
+                            points[y][z] = id;
+                            return;
+                        }
+
+                        foreach (var subpoint in points)
+                        {
+                            foreach (var subsubpoint in subpoint.Value)
+                            {
+                                InsertPush(pointX, subpoint.Key, subsubpoint.Key, subsubpoint.Value);
+                            }
+                        }
+                        points = null;
+                    }
+                    InsertPush(x, y, z, id);
+                }
+
+                public SegmentTreeNode ExtendUp(bool left)
+                {
+                    SegmentTreeNode node = null;
+                    if (left)
+                    {
+                        node = new SegmentTreeNode(2 * l - r, r, l);
+                        node.right = this;
+                        node.points = null;
+                    }
+                    else
+                    {
+                        node = new SegmentTreeNode(l, 2 * r - l, r);
+                        node.left = this;
+                        node.points = null;
+                    }
+                    return node;
+                }
+
+                public void Erase(double x, double y, double z)
+                {
+                    if (points != null)
+                    {
+                        if (!points.ContainsKey(y) || !points[y].ContainsKey(z))
+                        {
+                            return;
+                        }
+                        points[y].Remove(z);
+                        if (points[y].Count != 0)
+                        {
+                            return;
+                        }
+                        points.Remove(y);
+                        return;
+                    }
+
+                    if (x < m)
+                    {
+                        if (left == null)
+                        {
+                            return;
+                        }
+                        left.Erase(x, y, z);
+
+                        if (right == null && left.points != null)
+                        {
+                            points = left.points;
+                            pointX = left.pointX;
+                            left = null;
+                        }
+                        else if (left.points != null && left.points.Count == 0)
+                        {
+                            left = null;
+                            if (right.points != null)
+                            {
+                                points = right.points;
+                                pointX = right.pointX;
+                                right = null;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if (right == null)
+                        {
+                            return;
+                        }
+                        right.Erase(x, y, z);
+
+                        if (left == null && right.points != null)
+                        {
+                            points = right.points;
+                            pointX = right.pointX;
+                            right = null;
+                        }
+                        else if (right.points != null && right.points.Count == 0)
+                        {
+                            right = null;
+                            if (left.points != null)
+                            {
+                                points = left.points;
+                                pointX = left.pointX;
+                                left = null;
+                            }
+                        }
+                    }
+                }
+
+                private bool FindInDictionaries(double ly, double ry, double lz, double rz, out ulong id)
+                {
+                    foreach (var subpoint in points)
+                    {
+                        if (subpoint.Key <= ly || ry <= subpoint.Key)
+                        {
+                            continue;
+                        }
+                        foreach (var subsubpoint in subpoint.Value)
+                        {
+                            if (subsubpoint.Key <= lz || rz <= subsubpoint.Key)
+                            {
+                                continue;
+                            }
+                            id = subsubpoint.Value;
+                            return true;
+                        }
+                    }
+                    id = 0;
+                    return false;
+                }
+
+                public bool FindRecursive(double ly, double ry, double lz, double rz, out ulong id)
+                {
+                    if (points != null)
+                    {
+                        return FindInDictionaries(ly, ry, lz, rz, out id);
+                    }
+                    if (left != null && left.FindRecursive(ly, ry, lz, rz, out id))
+                    {
+                        return true;
+                    }
+                    if (right != null && right.FindRecursive(ly, ry, lz, rz, out id))
+                    {
+                        return true;
+                    }
+                    id = 0;
+                    return false;
+                }
+
+                public bool Find(double lx, double rx, double ly, double ry, double lz, double rz, out ulong id)
+                {
+                    if (lx < l && r <= rx)
+                    {
+                        return FindRecursive(ly, ry, lz, rz, out id);
+                    }
+                    
+                    if (points != null)
+                    {
+                        if (pointX < lx || rx < pointX || !FindInDictionaries(ly, ry, lz, rz, out id))
+                        {
+                            id = 0;
+                            return false;
+                        }
+                        return true;
+                    }
+                    
+                    if (lx < m)
+                    {
+                        if (left != null && left.Find(lx, rx, ly, ry, lz, rz, out id))
+                        {
+                            return true;
+                        }
+                    }
+                    if (m < rx)
+                    {
+                        if (right != null && right.Find(lx, rx, ly, ry, lz, rz, out id))
+                        {
+                            return true;
+                        }
+                    }
+
+                    id = 0;
+                    return false;
+                }
+            }
+
+            private (double min, double max) HeuristicRange(double x)
+            {
+                x = Math.Abs(x);
+                return x < 1e-16 ? (-1, 1) : (-2 * x, 2 * x);
+            }
+
+            public SegmentTree()
+            {
+                root = null;
+            }
+
+            public void Insert(double x, double y, double z, ulong id)
+            {
+                if (root == null)
+                {
+                    var range = HeuristicRange(x);
+                    root = new SegmentTreeNode(range.min, range.max);
+                }
+
+                while (x < root.l)
+                {
+                    root = root.ExtendUp(true);
+                }
+                while (root.r <= x)
+                {
+                    root = root.ExtendUp(false);
+                }
+                root.Insert(x, y, z, id);
+            }
+
+            public void Erase(double x, double y, double z)
+            {
+                if (root == null || x < root.l || root.r <= x)
+                {
+                    return;
+                }
+
+                root.Erase(x, y, z);
+                if (root.points != null && root.points.Count == 0)
+                {
+                    root = null;
+                }
+            }
+
+            public bool Find(double lx, double rx, double ly, double ry, double lz, double rz, out ulong id)
+            {
+                if (root == null || 
+                   (root.r <= lx || rx <= root.l))
+                {
+                    id = 0;
+                    return false;
+                }
+
+                return root.Find(lx, rx, ly, ry, lz, rz, out id);
+            }
+        }
 
         #endregion
 
@@ -357,13 +650,19 @@ namespace Elements.Spatial.AdaptiveGrid
         /// <returns></returns>
         public bool TryGetVertexIndex(Vector3 point, out ulong id, double? tolerance = null)
         {
-            var zDict = GetAddressParent(_verticesLookup, point, tolerance: tolerance);
-            if (zDict == null)
+            if (!tolerance.HasValue || tolerance.Value <= 0)
             {
-                id = 0;
-                return false;
+                throw new Exception("Invalid tolerance value supplied.");
             }
-            return TryGetValue(zDict, point.Z, out id, tolerance);
+
+            return _verticesLookup.Find(
+                point.X - tolerance.Value, 
+                point.X + tolerance.Value, 
+                point.Y - tolerance.Value, 
+                point.Y + tolerance.Value, 
+                point.Z - tolerance.Value, 
+                point.Z + tolerance.Value, 
+                out id);
         }
 
         /// <summary>
@@ -376,11 +675,10 @@ namespace Elements.Spatial.AdaptiveGrid
         {
             if (!TryGetVertexIndex(point, out var id, Tolerance))
             {
-                var zDict = GetAddressParent(_verticesLookup, point, true, Tolerance);
                 id = this._vertexId;
                 var vertex = new Vertex(id, point);
-                zDict[point.Z] = id;
                 _vertices[id] = vertex;
+                _verticesLookup.Insert(point.X, point.Y, point.Z, id);
                 this._vertexId++;
             }
 
@@ -754,7 +1052,7 @@ namespace Elements.Spatial.AdaptiveGrid
                 {
                     // The same vertex can be part of multiple edges.
                     // Cache to avoid expensive cut operations.
-                    if (!alreadyConnected.Contains(newSV.Id) && 
+                    if (!alreadyConnected.Contains(newSV.Id) &&
                         TryGetVertexIndex(Start, out var id, Tolerance))
                     {
                         AddEdge(newSV.Id, id);
@@ -1274,24 +1572,9 @@ namespace Elements.Spatial.AdaptiveGrid
 
         private void DeleteVertex(ulong id)
         {
-            var vertex = _vertices[id];
+            var v = _vertices[id];
             _vertices.Remove(id);
-            var zDict = GetAddressParent(_verticesLookup, vertex.Point, tolerance: Tolerance);
-            if (zDict == null)
-            {
-                return;
-            }
-            zDict.Remove(vertex.Point.Z);
-
-            TryGetValue(_verticesLookup, vertex.Point.X, out var yzDict, Tolerance);
-            if (zDict.Count == 0)
-            {
-                yzDict.Remove(vertex.Point.Y);
-            }
-            if (yzDict.Count == 0)
-            {
-                _verticesLookup.Remove(vertex.Point.X);
-            }
+            _verticesLookup.Erase(v.Point.X, v.Point.Y, v.Point.Z);
         }
 
         private Grid2d CreateGridFromPolygon(Polygon boundingPolygon)
@@ -1365,16 +1648,16 @@ namespace Elements.Spatial.AdaptiveGrid
             points.Sort((p, q) => Math.Sign(lineVector.Dot(p.Point - q.Point)));
             for (int i = 1; i < points.Count; ++i)
             {
-                resultingSegments.Add((points[i-1], points[i]));
+                resultingSegments.Add((points[i - 1], points[i]));
             }
             return resultingSegments;
         }
 
         private List<(Vertex from, Vertex to)> SplitSegmentsWithPoints(
-            IEnumerable<Line> segmentsToSplit, 
-            double u, 
-            List<double> coords, 
-            bool linesU, 
+            IEnumerable<Line> segmentsToSplit,
+            double u,
+            List<double> coords,
+            bool linesU,
             List<Vertex> intersectionPoints,
             Transform fromGrid)
         {
@@ -1515,7 +1798,7 @@ namespace Elements.Spatial.AdaptiveGrid
         private bool IsLineInDomain(
             (Vector3 Start, Vector3 End) line,
             (Vector3 Min, Vector3 Max) domain,
-            double xyTolerance, double zTolerance, 
+            double xyTolerance, double zTolerance,
             out bool startInside, out bool endInside)
         {
             startInside = false;
