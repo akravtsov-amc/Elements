@@ -232,6 +232,155 @@ namespace Elements.Spatial.AdaptiveGrid
             return polyline.Segments().Any(s => Intersects(s, tolerance));
         }
 
+        public List<Line> Intersect(Line line, out List<Line> outsideSegments, double tolerance = 1e-5)
+        {
+            outsideSegments = new List<Line>();
+            foreach (var polygon in _primaryPolygons)
+            {
+                if (!line.IsOnPlane(polygon.Plane(), tolerance))
+                {
+                    continue;
+                }
+
+                return line.Trim(polygon, out outsideSegments, false);
+            }
+
+            if (_primaryPolygons.Count == 0)
+            {
+                outsideSegments.Add(new Line(line.Start, line.End));
+                return new List<Line>();
+            }
+
+            var basePolygon = _primaryPolygons.First();
+            var secondBasePolygon = _primaryPolygons.Last();
+            var normal = basePolygon.Normal().Unitized().Negate();
+            var lineVector = line.End - line.Start;
+            if (lineVector.Cross(normal).IsZero())
+            {
+                line.Intersects(basePolygon.Plane(), out var point1, infinite: true);
+                basePolygon.Contains(point1, out var containment);
+                if (containment != Containment.Inside)
+                {
+                    outsideSegments.Add(new Line(line.Start, line.End));
+                    return new List<Line>();
+                }
+                line.Intersects(secondBasePolygon.Plane(), out var point2, infinite: true);
+
+                double q0 = lineVector.LengthSquared();
+                double q1 = lineVector.Dot(point1 - line.Start);
+                double q2 = lineVector.Dot(point2 - line.End);
+                if (q1 > q2)
+                {
+                    (q1, q2, point1, point2) = (q2, q1, point2, point1);
+                }
+
+                if (q1 <= 0)
+                {
+                    if (q2 < q0)
+                    {
+                        outsideSegments.Add(new Line(point2, line.End));
+                        return new List<Line> { new Line(line.Start, point2) };
+                    }
+                    return new List<Line> { new Line(line.Start, line.End) };
+                }
+
+                outsideSegments.Add(new Line(line.Start, point1));
+                if (q2 < q0)
+                {
+                    outsideSegments.Add(new Line(point2, line.End));
+                    return new List<Line> { new Line(point1, point2) };
+                }
+                return new List<Line> { new Line(point1, line.End) };
+            }
+
+            var insideSegments = new List<Line>();
+
+            var center = basePolygon.Vertices.First();
+            double hStart = normal.Dot(line.Start - center);
+            double hEnd = normal.Dot(line.End - center);
+            double hSecond = normal.Dot(secondBasePolygon.Vertices.First() - center);
+            bool reversed = false;
+
+            if (hStart > hEnd)
+            {
+                (hStart, hEnd) = (hEnd, hStart);
+                line = line.Reversed();
+                reversed = true;
+            }
+
+            var tempOutsideSegments = new List<Line>();
+            if (hEnd <= 0 || hStart >= hSecond)
+            {
+                tempOutsideSegments.Add(new Line(line.Start, line.End));
+            }
+            else
+            {
+                Line leftExtraSegment = null;
+                Line rightExtraSegment = null;
+
+                var point1 = line.Start - normal * hStart;
+                if (hStart < 0)
+                {
+                    line.Intersects(basePolygon.Plane(), out point1);
+                    hStart = 0;
+                    leftExtraSegment = new Line(line.Start, point1);
+                }
+                var point2 = line.End - normal * hEnd;
+                if (hEnd > hSecond)
+                {
+                    line.Intersects(secondBasePolygon.Plane(), out point2);
+                    rightExtraSegment = new Line(point2, line.End);
+                    hEnd = hSecond;
+                    point2 -= normal * hEnd;
+                }
+
+                List<Line> localOutsideSegments;
+                var localLine = new Line(point1, point2);
+                var localLineVector = point2 - point1;
+                var localMaxParameter = localLineVector.LengthSquared();
+                var localInsideSegments = localLine.Trim(basePolygon, out localOutsideSegments);
+
+                var localPointParameter = new Func<Vector3, double>(p => localLineVector.Dot(p - point1) / localMaxParameter);
+                var bringPointUp = new Func<Vector3, Vector3>(p => p + (localPointParameter(p) * (hEnd - hStart) + hStart) * normal);
+
+                var insertAndMerge = new Action<List<Line>, Line>((lst, ln) =>
+                {
+                    if (lst.Count > 0 && (ln.Start - lst.Last().End).LengthSquared() <= tolerance * tolerance)
+                    {
+                        lst[lst.Count - 1] = new Line(lst.Last().Start, ln.End);
+                    }
+                    else
+                    {
+                        lst.Add(ln);
+                    }
+                });
+
+                if (leftExtraSegment != null)
+                {
+                    tempOutsideSegments.Add(leftExtraSegment);
+                }
+                localOutsideSegments.ForEach(ln => insertAndMerge(tempOutsideSegments, new Line(bringPointUp(ln.Start), bringPointUp(ln.End))));
+                if (rightExtraSegment != null)
+                {
+                    insertAndMerge(tempOutsideSegments, rightExtraSegment);
+                }
+
+                insideSegments = localInsideSegments.Select(ln => new Line(bringPointUp(ln.Start), bringPointUp(ln.End))).ToList();
+            }
+
+            if (reversed)
+            {
+                outsideSegments = tempOutsideSegments.Select(ln => ln.Reversed()).Reverse().ToList();
+                insideSegments = insideSegments.Select(ln => ln.Reversed()).Reverse().ToList();
+            }
+            else
+            {
+                outsideSegments = tempOutsideSegments;
+            }
+
+            return insideSegments;
+        }
+
         /// <summary>
         /// Check if line intersects with obstacle
         /// </summary>
@@ -305,7 +454,7 @@ namespace Elements.Spatial.AdaptiveGrid
             _primaryPolygons.Clear();
 
             var boundaryTransform = new Transform(Boundary.Centroid(), Boundary.Plane().Normal);
-            var boundary = Boundary.TransformedPolygon(boundaryTransform.Inverted()).Offset(Offset).FirstOrDefault();
+            var boundary = Boundary.TransformedPolygon(boundaryTransform.Inverted()).OffsetPolygon(Offset);
 
             if (boundary == null)
             {

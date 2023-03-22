@@ -400,5 +400,75 @@ namespace Elements
             Assert.Contains(vertex.Edges, e => grid.GetVertex(e.OtherVertexId(id)).Point.IsAlmostEqualTo(new Vector3(new Vector3(5.6, 5.6, 0))));
             Assert.Contains(vertex.Edges, e => grid.GetVertex(e.OtherVertexId(id)).Point.IsAlmostEqualTo(new Vector3(new Vector3(5.6, 4.4, 0))));
         }
+
+        [Fact]
+        void outsideSegmentsTest()
+        {
+            var obstacleBase = new Polygon(
+                new Vector3(0, 0), 
+                new Vector3(2, 0), 
+                new Vector3(2, 1), 
+                new Vector3(1, 1), 
+                new Vector3(1, 2), 
+                new Vector3(2, 2), 
+                new Vector3(2, 3), 
+                new Vector3(0, 3));
+            var obstacle = new Obstacle(obstacleBase, 3, 0, true, true, new Transform());
+            List<Line> outsideSegments;
+            Line line; 
+
+            line = new Line(new Vector3(-.25, -1, 3), new Vector3(-.25, 5, 3));
+            Assert.Equal(0, obstacle.Intersect(line, out outsideSegments).Count);
+            Assert.Equal(1, outsideSegments.Count);
+
+            line = new Line(new Vector3(2, -1, 2), new Vector3(2, 5, 2));
+            Assert.Equal(0, obstacle.Intersect(line, out outsideSegments).Count);
+            Assert.Equal(1, outsideSegments.Count);
+
+            {
+                double[] leftYs = new double[] { -1, 0, .5, 1, 1.25 };
+                double[] rightYs = new double[] { 1.75, 2, 2.5, 3, 5 };
+                double[] zs = new double[] { 3, 2 };
+                int[][] countsIn = new int[][]
+                {
+                    new int[] { 1, 1, 2, 2, 2 },
+                    new int[] { 1, 1, 2, 2, 2 },
+                    new int[] { 1, 1, 2, 2, 2 },
+                    new int[] { 0, 0, 1, 1, 1 },
+                    new int[] { 0, 0, 1, 1, 1 },
+                };
+                int[][] countsOut = new int[][]
+                {
+                    new int[] { 2, 2, 2, 2, 3 },
+                    new int[] { 1, 1, 1, 1, 2 },
+                    new int[] { 1, 1, 1, 1, 2 },
+                    new int[] { 1, 1, 1, 1, 2 },
+                    new int[] { 1, 1, 1, 1, 2 },
+                };
+
+                for (int i = 0; i < leftYs.Length; ++i)
+                {
+                    double y1 = leftYs[i];
+                    for (int j = 0; j < rightYs.Length; ++j)
+                    {
+                        double y2 = rightYs[j];
+                        foreach (double z in zs)
+                        {
+                            line = new Line(new Vector3(1.5, y1, z), new Vector3(1.5, y2, z));
+                            Assert.Equal(countsIn[i][j],obstacle.Intersect(line, out outsideSegments).Count);
+                            Assert.Equal(countsOut[i][j], outsideSegments.Count);
+                        }
+                    }
+                }
+            }
+
+            line = new Line(new Vector3(1, 0, 4), new Vector3(1, 4, 0));
+            Assert.Equal(1, obstacle.Intersect(line, out outsideSegments).Count);
+            Assert.Equal(2, outsideSegments.Count);
+
+            line = new Line(new Vector3(1, 0, 3.1), new Vector3(1, 3.1, 0));
+            Assert.Equal(2, obstacle.Intersect(line, out outsideSegments).Count);
+            Assert.Equal(3, outsideSegments.Count);
+        }
     }
 }
