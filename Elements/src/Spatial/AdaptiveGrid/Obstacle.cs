@@ -454,7 +454,7 @@ namespace Elements.Spatial.AdaptiveGrid
             _primaryPolygons.Clear();
 
             var boundaryTransform = new Transform(Boundary.Centroid(), Boundary.Plane().Normal);
-            var boundary = Boundary.TransformedPolygon(boundaryTransform.Inverted()).OffsetPolygon(Offset);
+            var boundary = Boundary.TransformedPolygon(boundaryTransform.Inverted()).Offset(Offset).FirstOrDefault();
 
             if (boundary == null)
             {
