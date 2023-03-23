@@ -124,13 +124,13 @@ namespace Elements
             var obstacle = Obstacle.FromWall(wall, 0.5);
 
             // intersects wall line
-            Assert.True(obstacle.Intersects(new Line(Vector3.Origin, new Vector3(10, 0))));
+            Assert.True(obstacle.Intersects(new Line(Vector3.Origin, new Vector3(10, 0)), out _, out _, out _));
             // intersects line that crosses wall
-            Assert.True(obstacle.Intersects(new Line(new Vector3(3, -1, 2), new Vector3(3, 1, 3))));
+            Assert.True(obstacle.Intersects(new Line(new Vector3(3, -1, 2), new Vector3(3, 1, 3)), out _, out _, out _));
             // intersects line that crosses wall at the top
-            Assert.True(obstacle.Intersects(new Line(new Vector3(3, -1, 3.5), new Vector3(3, 1, 3.5))));
+            Assert.True(obstacle.Intersects(new Line(new Vector3(3, -1, 3.5), new Vector3(3, 1, 3.5)), out _, out _, out _));
             // does not intersect line that is above wall
-            Assert.False(obstacle.Intersects(new Line(new Vector3(0, 0, 4), new Vector3(10, 0, 4))));
+            Assert.False(obstacle.Intersects(new Line(new Vector3(0, 0, 4), new Vector3(10, 0, 4)), out _, out _, out _));
 
             // ensure that line direction does not matter
             centerLine = centerLine.Reversed();
@@ -226,44 +226,44 @@ namespace Elements
             var horizontalLine = new Line(Vector3.Origin, new Vector3(0, 10));
             var horizontalObstacle = Obstacle.FromLine(horizontalLine, offset);
 
-            Assert.True(horizontalObstacle.Intersects(horizontalLine));
+            Assert.True(horizontalObstacle.Intersects(horizontalLine, out _, out _, out _));
 
             var horizontalLineOnTop = horizontalLine.TransformedLine(new Transform(0, 0, offset));
-            Assert.True(horizontalObstacle.Intersects(horizontalLineOnTop));
+            Assert.True(horizontalObstacle.Intersects(horizontalLineOnTop, out _, out _, out _));
 
             var horizontalLineOnBottom = horizontalLine.TransformedLine(new Transform(0, 0, -offset));
-            Assert.True(horizontalObstacle.Intersects(horizontalLineOnBottom));
+            Assert.True(horizontalObstacle.Intersects(horizontalLineOnBottom, out _, out _, out _));
 
             var horizontalLineOnSide = horizontalLine.TransformedLine(new Transform(offset, 0, 0));
-            Assert.True(horizontalObstacle.Intersects(horizontalLineOnSide));
+            Assert.True(horizontalObstacle.Intersects(horizontalLineOnSide, out _, out _, out _));
 
             var horizontalLineIntersecting = horizontalLine.TransformedLine(new Transform(0, offset, 0));
-            Assert.True(horizontalObstacle.Intersects(horizontalLineIntersecting));
+            Assert.True(horizontalObstacle.Intersects(horizontalLineIntersecting, out _, out _, out _));
 
             var verticalLine = new Line(Vector3.Origin, new Vector3(0, 0, 10));
             var verticalObstacle = Obstacle.FromLine(verticalLine);
 
-            Assert.True(verticalObstacle.Intersects(verticalLine));
+            Assert.True(verticalObstacle.Intersects(verticalLine, out _, out _, out _));
 
             var verticalLineOnMainTop = verticalLine.TransformedLine(new Transform(0, offset, 0));
-            Assert.True(verticalObstacle.Intersects(verticalLineOnMainTop));
+            Assert.True(verticalObstacle.Intersects(verticalLineOnMainTop, out _, out _, out _));
 
             var verticalLineOnMainBottom = verticalLine.TransformedLine(new Transform(0, -offset, 0));
-            Assert.True(verticalObstacle.Intersects(verticalLineOnMainBottom));
+            Assert.True(verticalObstacle.Intersects(verticalLineOnMainBottom,out _, out _, out _));
 
             var lineIntersectingVerticalObstacle = verticalLine.TransformedLine(new Transform().RotatedAboutPoint(new Vector3(0, 0, 5), Vector3.YAxis, 30));
-            Assert.True(verticalObstacle.Intersects(lineIntersectingVerticalObstacle));
+            Assert.True(verticalObstacle.Intersects(lineIntersectingVerticalObstacle, out _, out _, out _));
 
             var angledLine = new Line(Vector3.Origin, new Vector3(10, 10, 10));
             var angledObstacle = Obstacle.FromLine(angledLine);
 
-            Assert.True(angledObstacle.Intersects(angledLine));
+            Assert.True(angledObstacle.Intersects(angledLine, out _, out _, out _));
 
             var lineIntersectingAngleObstacle = new Line(new Vector3(5, 5), new Vector3(5, 5, 10));
-            Assert.True(angledObstacle.Intersects(lineIntersectingAngleObstacle));
+            Assert.True(angledObstacle.Intersects(lineIntersectingAngleObstacle, out _, out _, out _));
 
             var offsetedLine = angledLine.TransformedLine(new Transform(offset, 0, 0));
-            Assert.True(angledObstacle.Intersects(offsetedLine));
+            Assert.True(angledObstacle.Intersects(offsetedLine, out _, out _, out _));
         }
 
         [Fact]
@@ -414,15 +414,18 @@ namespace Elements
                 new Vector3(2, 3), 
                 new Vector3(0, 3));
             var obstacle = new Obstacle(obstacleBase, 3, 0, true, true, new Transform());
-            List<Line> outsideSegments;
+            List<Line> outsideSegments, insideSegments;
+            List<Vector3> intersectionPoints;
             Line line; 
 
             line = new Line(new Vector3(-.25, -1, 3), new Vector3(-.25, 5, 3));
-            Assert.Equal(0, obstacle.Intersect(line, out outsideSegments).Count);
+            obstacle.Intersects(line, out intersectionPoints, out insideSegments, out outsideSegments);
+            Assert.Equal(0, insideSegments.Count);
             Assert.Equal(1, outsideSegments.Count);
 
             line = new Line(new Vector3(2, -1, 2), new Vector3(2, 5, 2));
-            Assert.Equal(0, obstacle.Intersect(line, out outsideSegments).Count);
+            obstacle.Intersects(line, out intersectionPoints, out insideSegments, out outsideSegments);
+            Assert.Equal(0, insideSegments.Count);
             Assert.Equal(1, outsideSegments.Count);
 
             {
@@ -455,7 +458,8 @@ namespace Elements
                         foreach (double z in zs)
                         {
                             line = new Line(new Vector3(1.5, y1, z), new Vector3(1.5, y2, z));
-                            Assert.Equal(countsIn[i][j],obstacle.Intersect(line, out outsideSegments).Count);
+                            obstacle.Intersects(line, out intersectionPoints, out insideSegments, out outsideSegments);
+                            Assert.Equal(countsIn[i][j], insideSegments.Count);
                             Assert.Equal(countsOut[i][j], outsideSegments.Count);
                         }
                     }
@@ -463,11 +467,13 @@ namespace Elements
             }
 
             line = new Line(new Vector3(1, 0, 4), new Vector3(1, 4, 0));
-            Assert.Equal(1, obstacle.Intersect(line, out outsideSegments).Count);
+            obstacle.Intersects(line, out intersectionPoints, out insideSegments, out outsideSegments);
+            Assert.Equal(1, insideSegments.Count);
             Assert.Equal(2, outsideSegments.Count);
 
             line = new Line(new Vector3(1, 0, 3.1), new Vector3(1, 3.1, 0));
-            Assert.Equal(2, obstacle.Intersect(line, out outsideSegments).Count);
+            obstacle.Intersects(line, out intersectionPoints, out insideSegments, out outsideSegments);
+            Assert.Equal(2, insideSegments.Count);
             Assert.Equal(3, outsideSegments.Count);
         }
     }
