@@ -433,24 +433,7 @@ namespace Elements.Spatial.AdaptiveGrid
 
             return insideSegments.Count > 0;
         }
-        /*
-        /// <summary>
-        /// Check if line intersects with obstacle
-        /// </summary>
-        /// <param name="line">Line to check</param>
-        /// <param name="tolerance">Tolerance of checks</param>
-        /// <returns>Result of check</returns>
-        public bool Intersects(Line line, double tolerance = 1e-05)
-        {
-            if (_primaryPolygons.Any(x => IntersectsWithHorizontalPolygon(x, line, tolerance)))
-            {
-                return true;
-            }
-
-            var hints = _secondaryPolygons.Where(x => DoesPolygonIntersectsWithLine(x, line, tolerance)).ToList();
-            return hints.Any() && hints.Count % 2 == 0;
-        }
-        */
+        
         /// <summary>
         /// Create visual representation of obstacle
         /// </summary>
