@@ -211,23 +211,22 @@ namespace Elements.Spatial.AdaptiveGrid
             var frame = obstacle.Orientation == null ? Transform : obstacle.Orientation;
             var toGrid = frame.Inverted();
             List<Vector3> localPoints = obstacle.Points.Select(p => toGrid.OfPoint(p)).ToList();
-            BBox3 localBox = new BBox3(localPoints);
+            BBox3 globalBox = new BBox3(localPoints);
 
             var edgesToDelete = new List<Edge>();
-            var edgesToAdd = new List<(Vertex Anchor, Edge Edge, Vector3 New)>();
 
             foreach (var edge in GetEdges())
             {
                 var start = GetVertex(edge.StartId);
                 var end = GetVertex(edge.EndId);
-                var localStartP = toGrid.OfPoint(start.Point);
-                var localEndP = toGrid.OfPoint(end.Point);
+                var startP = toGrid.OfPoint(start.Point);
+                var endP = toGrid.OfPoint(end.Point);
 
                 //Z coordinates and X/Y are treated differently.
                 //If edge lies on one of X or Y planes of the box - it's not treated as "Inside" and edge is kept.
                 //If edge lies on one of Z planes - it's still "Inside", so edge is cut or removed.
                 //This is because we don't want travel under or over obstacles on elevation where they start/end.
-                if (!IsLineInDomain((localStartP, localEndP), (localBox.Min, localBox.Max),
+                if (!IsLineInDomain((startP, endP), (globalBox.Min, globalBox.Max),
                     -Tolerance, 0, out bool startInside, out bool endInside))
                 {
                     continue;
@@ -239,73 +238,9 @@ namespace Elements.Spatial.AdaptiveGrid
                 }
                 else
                 {
-                    var localLine = new Line(localStartP, localEndP);
-                    List<Vector3> intersections;
-                    localLine.Intersects(localBox, out intersections, tolerance: Tolerance);
-                    if (intersections.Count == 1)
-                    {
-                        //Need to find which end is inside the box.
-                        //If none - we just touched the corner
-                        var intersection = frame.OfPoint(intersections[0]);
-                        if (startInside)
-                        {
-                            edgesToDelete.Add(edge);
-                            edgesToAdd.Add((end, edge, intersection));
-                        }
-                        else if (endInside)
-                        {
-                            edgesToDelete.Add(edge);
-                            edgesToAdd.Add((start, edge, intersection));
-                        }
-                        else
-                        {
-                            edgesToAdd.Add((null, edge, intersection));
-                        }
-                    }
-                    else if (intersections.Count == 2)
+                    if (obstacle.Intersects(new Line(startP, endP), out _, out _, out _, Tolerance))
                     {
                         edgesToDelete.Add(edge);
-                        var startIntersection = frame.OfPoint(intersections[0]);
-                        var endIntersection = frame.OfPoint(intersections[1]);
-                        edgesToAdd.Add((start, edge, startIntersection));
-                        edgesToAdd.Add((end, edge, endIntersection));
-                    }
-                }
-            }
-
-            //TODO: this code builds perimeters, elevation by elevation, but do not connect them vertically.
-            if (obstacle.AddPerimeterEdges && edgesToAdd.Any())
-            {
-                var corners = localBox.Corners().Take(4).Select(c => frame.OfPoint(c)).ToList();
-                var intersectionsByElevations = edgesToAdd.GroupBy(
-                    e => e.New.Z, new DoubleToleranceComparer(Tolerance));
-                foreach (var group in intersectionsByElevations)
-                {
-                    var intersections = group.Select(i => i.New);
-
-                    var plane = new Plane(new Vector3(0, 0, group.Key), Vector3.ZAxis);
-                    var cornersAtElevation = corners.Select(
-                        c => c.ProjectAlong(frame.ZAxis, plane)).ToList();
-
-                    AddEdgesOnLine(cornersAtElevation[0], cornersAtElevation[1], intersections, obstacle.AllowOutsideBoudary);
-                    AddEdgesOnLine(cornersAtElevation[1], cornersAtElevation[2], intersections, obstacle.AllowOutsideBoudary);
-                    AddEdgesOnLine(cornersAtElevation[2], cornersAtElevation[3], intersections, obstacle.AllowOutsideBoudary);
-                    AddEdgesOnLine(cornersAtElevation[3], cornersAtElevation[0], intersections, obstacle.AllowOutsideBoudary);
-
-                    foreach (var item in group)
-                    {
-                        if (item.Anchor != null)
-                        {
-                            if (!item.Anchor.Point.IsAlmostEqualTo(item.New, Tolerance))
-                            {
-                                Vertex v = AddVertex(item.New);
-                                AddInsertEdge(v.Id, item.Anchor.Id);
-                            }
-                        }
-                        else
-                        {
-                            CutEdge(item.Edge, item.New);
-                        }
                     }
                 }
             }
