@@ -210,8 +210,6 @@ namespace Elements.Spatial.AdaptiveGrid
         {
             var frame = obstacle.Orientation == null ? Transform : obstacle.Orientation;
             var toGrid = frame.Inverted();
-            List<Vector3> localPoints = obstacle.Points.Select(p => toGrid.OfPoint(p)).ToList();
-            BBox3 localBox = new BBox3(localPoints);
 
             var edgesToDelete = new List<Edge>();
             var edgesToAdd = new List<Line>();
@@ -221,42 +219,22 @@ namespace Elements.Spatial.AdaptiveGrid
             {
                 var start = GetVertex(edge.StartId);
                 var end = GetVertex(edge.EndId);
-                var localStartP = toGrid.OfPoint(start.Point);
-                var localEndP = toGrid.OfPoint(end.Point);
 
-                //Z coordinates and X/Y are treated differently.
-                //If edge lies on one of X or Y planes of the box - it's not treated as "Inside" and edge is kept.
-                //If edge lies on one of Z planes - it's still "Inside", so edge is cut or removed.
-                //This is because we don't want travel under or over obstacles on elevation where they start/end.
-                if (!IsLineInDomain((localStartP, localEndP), (localBox.Min, localBox.Max),
-                    -Tolerance, 0, out bool startInside, out bool endInside))
+                var globalLine = new Line(start.Point, end.Point);
+                List<Vector3> intersections;
+                List<Line> outsideSegments;
+                if (obstacle.Intersects(globalLine, out intersections, out _, out outsideSegments, -Tolerance))
                 {
-                    continue;
-                }
-
-                if (startInside && endInside)
-                {
+                    intersectionPoints.AddRange(intersections.Select(p => toGrid.OfPoint(p)));
                     edgesToDelete.Add(edge);
-                }
-                else
-                {
-                    var localLine = new Line(localStartP, localEndP);
-                    var globalLine = new Line(start.Point, end.Point);
-                    List<Vector3> intersections;
-                    List<Line> outsideSegments;
-                    if (obstacle.Intersects(globalLine, out intersections, out _, out outsideSegments, Tolerance))
-                    {
-                        intersectionPoints.AddRange(intersections.Select(p => toGrid.OfPoint(p)));
-                        edgesToDelete.Add(edge);
-                        edgesToAdd.AddRange(outsideSegments);
-                    }
+                    edgesToAdd.AddRange(outsideSegments);
                 }
             }
 
             //TODO: this code builds perimeters, elevation by elevation, but do not connect them vertically.
-            if (obstacle.AddPerimeterEdges && edgesToAdd.Any())
+            if (obstacle.AddPerimeterEdges && intersectionPoints.Any())
             {
-                var corners = localPoints.Select(c => frame.OfPoint(c)).ToList();
+                var corners = obstacle.Points;
                 var intersectionsByElevations = intersectionPoints.GroupBy(
                     p => p.Z, new DoubleToleranceComparer(Tolerance));
                 foreach (var group in intersectionsByElevations)
@@ -265,17 +243,21 @@ namespace Elements.Spatial.AdaptiveGrid
                     var cornersAtElevation = corners.Select(
                         c => c.ProjectAlong(frame.ZAxis, plane)).ToList();
 
-                    AddEdgesOnLine(cornersAtElevation[0], cornersAtElevation[1], group, obstacle.AllowOutsideBoudary);
-                    AddEdgesOnLine(cornersAtElevation[1], cornersAtElevation[2], group, obstacle.AllowOutsideBoudary);
-                    AddEdgesOnLine(cornersAtElevation[2], cornersAtElevation[3], group, obstacle.AllowOutsideBoudary);
-                    AddEdgesOnLine(cornersAtElevation[3], cornersAtElevation[0], group, obstacle.AllowOutsideBoudary);
+                    for (int i = 1; i < cornersAtElevation.Count; ++i)
+                    {
+                        AddEdgesOnLine(cornersAtElevation[i - 1], cornersAtElevation[i], group, obstacle.AllowOutsideBoudary);
+                    }
+                    AddEdgesOnLine(cornersAtElevation.Last(), cornersAtElevation[0], group, obstacle.AllowOutsideBoudary);
                 }
 
                 foreach (var item in edgesToAdd)
                 {
                     var v1 = AddVertex(item.Start).Id;
                     var v2 = AddVertex(item.End).Id;
-                    AddInsertEdge(v1, v2);
+                    if (v1 != v2)
+                    {
+                        AddInsertEdge(v1, v2);
+                    }
                 }
             }
 

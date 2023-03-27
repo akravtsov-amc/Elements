@@ -232,6 +232,30 @@ namespace Elements.Spatial.AdaptiveGrid
             return polyline.Segments().Any(s => Intersects(s, out _, out _, out _, tolerance));
         }
 
+        private List<Polygon> OffsetPolygon(Polygon polygon, double offset)
+        {
+            var transform = new Transform(polygon.Vertices.First(), polygon.Plane().Normal);
+            var invertedTransform = transform.Inverted();
+            return polygon.TransformedPolygon(invertedTransform).Offset(offset).Select(poly => poly.TransformedPolygon(transform)).ToList();
+        }
+
+        private void TrimWithPolygon(Line line, Polygon polygon, out List<Line> insideSegments, out List<Line> outsideSegments, double tolerance)
+        {
+            insideSegments = new List<Line>();
+            var tempInsideSegments = line.Trim(polygon, out outsideSegments);
+            foreach (var segment in tempInsideSegments)
+            {
+                if (OffsetPolygon(polygon, tolerance).Any(poly => poly.Contains(segment.Start) || poly.Contains(segment.End)))
+                {
+                    insideSegments.Add(segment);
+                }
+                else
+                {
+                    outsideSegments.Add(segment);
+                }
+            }
+        }
+
         public bool Intersects(Line line, out List<Vector3> intersectionPoints, out List<Line> insideSegments, out List<Line> outsideSegments, double tolerance = 1e-5)
         {
             outsideSegments = new List<Line>();
@@ -241,12 +265,12 @@ namespace Elements.Spatial.AdaptiveGrid
             bool primary = false;
             foreach (var polygon in _primaryPolygons)
             {
-                if (!line.IsOnPlane(polygon.Plane(), tolerance))
+                if (!line.IsOnPlane(polygon.Plane()))
                 {
                     continue;
                 }
 
-                insideSegments = line.Trim(polygon, out outsideSegments, !AddPerimeterEdges);
+                TrimWithPolygon(line, polygon, out insideSegments, out outsideSegments, tolerance);
                 primary = true;
                 break;
             }
@@ -265,8 +289,8 @@ namespace Elements.Spatial.AdaptiveGrid
                     if (lineVector.Cross(normal).IsZero())
                     {
                         line.Intersects(basePolygon.Plane(), out var point1, infinite: true);
-                        basePolygon.Contains(point1, out var containment);
-                        if ((AddPerimeterEdges && containment != Containment.Inside) || (!AddPerimeterEdges && containment == Containment.Outside))
+
+                        if (!OffsetPolygon(basePolygon, tolerance).Any(poly => poly.Contains(point1)))
                         {
                             outsideSegments.Add(new Line(line.Start, line.End));
                         }
@@ -276,7 +300,7 @@ namespace Elements.Spatial.AdaptiveGrid
 
                             double q0 = lineVector.LengthSquared();
                             double q1 = lineVector.Dot(point1 - line.Start);
-                            double q2 = lineVector.Dot(point2 - line.End);
+                            double q2 = lineVector.Dot(point2 - line.Start);
                             if (q1 > q2)
                             {
                                 (q1, q2, point1, point2) = (q2, q1, point2, point1);
@@ -350,11 +374,12 @@ namespace Elements.Spatial.AdaptiveGrid
                                 point2 -= normal * hEnd;
                             }
 
+                            List<Line> localInsideSegments;
                             List<Line> localOutsideSegments;
                             var localLine = new Line(point1, point2);
                             var localLineVector = point2 - point1;
                             var localMaxParameter = localLineVector.LengthSquared();
-                            var localInsideSegments = localLine.Trim(basePolygon, out localOutsideSegments, includeCoincidenceAtEdge: !AddPerimeterEdges);
+                            TrimWithPolygon(localLine, basePolygon, out localInsideSegments, out localOutsideSegments, tolerance);
 
                             var localPointParameter = new Func<Vector3, double>(p => localLineVector.Dot(p - point1) / localMaxParameter);
                             var bringPointUp = new Func<Vector3, Vector3>(p => p + (localPointParameter(p) * (hEnd - hStart) + hStart) * normal);
