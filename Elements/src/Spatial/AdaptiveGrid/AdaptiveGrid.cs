@@ -241,7 +241,7 @@ namespace Elements.Spatial.AdaptiveGrid
                 {
                     var plane = new Plane(new Vector3(0, 0, group.Key), Vector3.ZAxis);
                     var cornersAtElevation = corners.Select(
-                        c => c.ProjectAlong(frame.ZAxis, plane)).ToList();
+                        c => c.ProjectAlong(frame.ZAxis, plane)).UniqueWithinTolerance(Tolerance).ToList();
 
                     for (int i = 1; i < cornersAtElevation.Count; ++i)
                     {

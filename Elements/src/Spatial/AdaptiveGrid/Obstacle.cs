@@ -245,7 +245,7 @@ namespace Elements.Spatial.AdaptiveGrid
             var tempInsideSegments = line.Trim(polygon, out outsideSegments);
             foreach (var segment in tempInsideSegments)
             {
-                if (OffsetPolygon(polygon, tolerance).Any(poly => poly.Contains(segment.Start) || poly.Contains(segment.End)))
+                if (OffsetPolygon(polygon, tolerance).Any(poly => poly.Contains(segment.Start) || poly.Contains(segment.End) || poly.Edges().Any(e => new Line(e.from, e.to).Intersects(segment, out _))))
                 {
                     insideSegments.Add(segment);
                 }
