@@ -221,11 +221,9 @@ namespace Elements.Spatial.AdaptiveGrid
                 var end = GetVertex(edge.EndId);
 
                 var globalLine = new Line(start.Point, end.Point);
-                List<Vector3> intersections;
-                List<Line> outsideSegments;
-                if (obstacle.Intersects(globalLine, out intersections, out _, out outsideSegments, -Tolerance))
+                if (obstacle.Intersects(globalLine, out var outsideSegments, -Tolerance).Count > 0)
                 {
-                    intersectionPoints.AddRange(intersections.Select(p => toGrid.OfPoint(p)));
+                    intersectionPoints.AddRange(outsideSegments.SelectMany(ln => new List<Vector3> { toGrid.OfPoint(ln.Start), toGrid.OfPoint(ln.End) }).Concat(new List<Vector3> { toGrid.OfPoint(start.Point), toGrid.OfPoint(end.Point) }).UniqueWithinTolerance());
                     edgesToDelete.Add(edge);
                     edgesToAdd.AddRange(outsideSegments);
                 }
@@ -234,7 +232,7 @@ namespace Elements.Spatial.AdaptiveGrid
             //TODO: this code builds perimeters, elevation by elevation, but do not connect them vertically.
             if (obstacle.AddPerimeterEdges && intersectionPoints.Any())
             {
-                var corners = obstacle.Points;
+                var corners = obstacle.OneSidePoints;
                 var intersectionsByElevations = intersectionPoints.GroupBy(
                     p => p.Z, new DoubleToleranceComparer(Tolerance));
                 foreach (var group in intersectionsByElevations)
