@@ -210,6 +210,8 @@ namespace Elements.Spatial.AdaptiveGrid
         {
             var frame = obstacle.Orientation == null ? Transform : obstacle.Orientation;
             var toGrid = frame.Inverted();
+            List<Vector3> localPoints = obstacle.Points.Select(p => toGrid.OfPoint(p)).ToList();
+            BBox3 localBox = new BBox3(localPoints);
 
             var edgesToDelete = new List<Edge>();
             var edgesToAdd = new List<Line>();
@@ -219,6 +221,14 @@ namespace Elements.Spatial.AdaptiveGrid
             {
                 var start = GetVertex(edge.StartId);
                 var end = GetVertex(edge.EndId);
+                var localStartP = toGrid.OfPoint(start.Point);
+                var localEndP = toGrid.OfPoint(end.Point);
+
+                if (!IsLineInDomain((localStartP, localEndP), (localBox.Min, localBox.Max),
+                    -Tolerance, 0, out bool startInside, out bool endInside))
+                {
+                    continue;
+                }
 
                 var globalLine = new Line(start.Point, end.Point);
                 if (obstacle.Intersects(globalLine, out var outsideSegments, -Tolerance).Count > 0)
